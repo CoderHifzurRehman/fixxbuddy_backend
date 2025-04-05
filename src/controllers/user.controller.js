@@ -2,7 +2,10 @@ const { sendEmail } = require("../config/email");
 const User = require("../models/user.model");
 const { generateToken } = require("../utils/jwt");
 const { otpMailTemplate } = require("../utils/mailingFunction");
-const {uploadSingleImageToS3, uploadMultipleImagesToS3} = require("../utils/uploadImages");
+const {
+  uploadSingleImageToS3,
+  uploadMultipleImagesToS3,
+} = require("../utils/uploadImages");
 
 exports.userRegistration = async (req, res) => {
   try {
@@ -13,15 +16,13 @@ exports.userRegistration = async (req, res) => {
       return res.status(400).send("No file uploaded.");
     }
     const folderName = `partner/prfilePIC/${email}`; // Customize the folder name if needed
-    console.log(folderName);
-    
+    // console.log(folderName);
+
     const imageUrl = await uploadSingleImageToS3(file, folderName);
     // console.log(imageUrl);
 
-
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      
       return res.status(409).send({
         statusCode: 409,
         message: "User already exists. Check email for otp.",
@@ -33,26 +34,24 @@ exports.userRegistration = async (req, res) => {
       firstName,
       lastName,
       email,
-      imageUrl
+      imageUrl,
     });
 
     // Save the new user to the database
     const savedUser = await newUser.save();
 
-  
-
     // Generate a token (Make sure you have the token generation logic)
     const token = generateToken(savedUser); // Example function, replace with actual
-     const sendData={
-      firstName:savedUser?.firstName,
-      lastName:savedUser?.lastName,
-      email:savedUser?.email,
+    const sendData = {
+      firstName: savedUser?.firstName,
+      lastName: savedUser?.lastName,
+      email: savedUser?.email,
       imageUrl,
-      role:savedUser?.role,
-      isActive:savedUser?.isActive,
-      isEmailVerified:savedUser?.isEmailVerified,
-      profilePic:savedUser?.profilePic,
-     }
+      role: savedUser?.role,
+      isActive: savedUser?.isActive,
+      isEmailVerified: savedUser?.isEmailVerified,
+      profilePic: savedUser?.profilePic,
+    };
 
     res.status(201).send({
       statusCode: 201,
@@ -183,7 +182,7 @@ exports.getUserProfile = async (req, res) => {
     // console.log(req.user)
     // return
     // Fetch the user profile from the database
-    const user = await User.findById(userId).select('-otp otpExpiry ');
+    const user = await User.findById(userId).select("-otp otpExpiry ");
 
     if (!user) {
       return res
@@ -196,6 +195,51 @@ exports.getUserProfile = async (req, res) => {
       statusCode: 200,
       message: "User profile retrieved successfully",
       data: user,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+//updateUserProfile
+exports.updateUserProfile = async (req, res) => {
+  try {
+    const { firstName, lastName } = req.body;
+    const { id } = req.params;
+    // Find the user by ID
+    const user = await User.findById(id);
+    if (!user) {
+      return res
+        .status(404)
+        .send({ statusCode: 404, message: "User not found." });
+    }
+    // Handle image upload if a file is provided
+    let imageUrl = user.imageUrl; // Use the current image if no new image is provided
+    if (req.file) {
+      const { file } = req;
+      if (!file) {
+        return res.status(400).send("No file uploaded.");
+      }
+
+      const folderName = `user/profilePic/${user.email}`; // Customize the folder name if needed
+      // console.log("Folder Name: ", folderName);
+
+      // Upload image to S3 and get the image URL
+      imageUrl = await uploadSingleImageToS3(file, folderName);
+    }
+
+    // Update user fields
+    user.firstName = firstName || user.firstName;
+    user.lastName = lastName || user.lastName;
+    user.imageUrl = imageUrl;
+
+    // Save the updated user document
+    await user.save();
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "User profile updated successfully.",
     });
   } catch (err) {
     const errorMsg = err.message || "Unknown error";
