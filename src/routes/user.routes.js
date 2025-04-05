@@ -18,6 +18,8 @@ router.post("/verifyotp", userController.verifyOtp);
 
 router.get("/profile", authMiddleware, userController.getUserProfile);
 
+router.patch("/update/profile/:id",upload.single('image'), userController.updateUserProfile);
+
 
 
 
