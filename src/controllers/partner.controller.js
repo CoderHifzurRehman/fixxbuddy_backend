@@ -82,7 +82,7 @@ exports.partnerRegistration = async (req, res) => {
     res.status(201).send({
       statusCode: 201,
       message: "Partner registered successfully.",
-      data: { email },
+      data: { email,partnerId: newPartner._id },
     });
   } catch (err) {
     const errorMsg = err.message || "Unknown error";
