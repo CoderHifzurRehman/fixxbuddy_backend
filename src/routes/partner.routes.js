@@ -25,4 +25,16 @@ router.post('/upload/images/:id', upload.fields([
 router.post("/login", partnerController.partnerLogin);
 
 
+router.delete("/:id", partnerController.deletePartner);
+
+router.put("/:id", partnerController.updateProfile);
+
+router.get("/single/:id", partnerController.getSinglePartner);
+
+
+
+//get all partner
+
+router.get("/", partnerController.getAllPartenrs);
+
 module.exports = router;

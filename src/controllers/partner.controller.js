@@ -255,3 +255,132 @@ exports.updateProfile = async (req, res) => {
     });
   }
 };
+
+
+
+//getSinglePartner
+
+exports.getSinglePartner = async (req, res) => {
+  try {
+    const partnerId = req.params.id;
+
+    // Assuming you're using a MongoDB model called partner
+    const partner = await Partner.findById(partnerId);
+
+    // Check if the vehicle exists
+    if (!partner) {
+      return res.status(404).send({
+        statusCode: 404,
+        message: "Partner not found",
+      });
+    }
+
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "Get partner successfully",
+      data: partner
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+//delete partner
+
+exports.deletePartner = async (req, res) => {
+  try {
+    const partnerId = req.params.id;
+
+    // Assuming you're using a MongoDB model called partner
+    const partner = await Partner.findById(partnerId);
+
+    // Check if the partner exists
+    if (!partner) {
+      return res.status(404).send({
+        statusCode: 404,
+        message: "Partner not found",
+      });
+    }
+
+    // Delete the Partner
+    await Partner.deleteOne({ _id: partnerId });
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "partner deleted successfully",
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+//getAllPartenrs
+
+exports.getAllPartenrs = async (req, res) => {
+  try {
+    const page = req.query.page || 1;
+    const limit = req.query.limit || 50;
+    const sorted = { createdAt: -1 };
+    const query = {
+      // userId: req.user.id,
+    };
+    const partner = await exports.PartnerServicesPagination(
+      page,
+      limit,
+      sorted,
+      query
+    );
+
+    // console.log(partner);
+    if (partner.data.length === 0) {
+      return res.status(404).send({
+        statusCode: 404,
+        message: "No Partner found for this criteria",
+      });
+    }
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "Partner fetch successfully",
+      pagination: partner.pagination,
+      data: partner.data,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+
+
+
+exports.PartnerServicesPagination = async (page, limit, sorted, query) => {
+  try {
+    const skip = (page - 1) * limit;
+
+    const data = await Partner.find(query)
+      .sort(sorted)
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    // Get the total count for pagination metadata
+    const totalCount = await Partner.countDocuments(query);
+
+    // Calculate pagination info
+    const totalPages = Math.ceil(totalCount / limit);
+    // Create the pagination object
+    const pagination = {
+      totalCount,
+      totalPages,
+      currentPage: page,
+      pageSize: limit,
+    };
+    return { data, pagination };
+  } catch (error) {
+    throw new Error(error.message);
+  }
+};
