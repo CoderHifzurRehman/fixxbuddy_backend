@@ -129,55 +129,57 @@ exports.partnerLogin = async (req, res) => {
 
 exports.uploadImages = async (req, res) => {
   try {
-    const { profilePic, aadharPic, pcc } = req.files;
-
-    if (!profilePic || !aadharPic || !pcc) {
-      return res
-        .status(400)
-        .send({ statusCode: 400, message: "One or more files are missing." });
+    // console.log(req.files);
+    const { profilePic, aadharPic, pcc } = req.files || {};
+    const partnerId = req.params.id;
+    const folderName = `partner/images/${partnerId}`;
+    const updateFields = {};
+  
+    // Upload and update only if the image exists
+    if (profilePic && profilePic[0]) {
+      const [profilePicUrl] = await uploadMultipleImagesToS3([profilePic[0]], folderName);
+      updateFields.profilePic = profilePicUrl;
     }
-
-    // Prepare files as an array to upload them together
-    const files = [profilePic[0], aadharPic[0], pcc[0]]; // Assuming only one file for each field
-    const folderName = `partner/images/${req.params.id}`;
-
-    // Call the helper function to upload files to S3 and get the URLs
-    const imageUrls = await uploadMultipleImagesToS3(files, folderName);
-
-    // Extract the URLs from the array returned by the upload function
-    const [profilePicUrl, aadharPicUrl, pccUrl] = imageUrls;
-
-    // Save the URLs in the database
-    const partnerId = req.params.id; // Assume user ID is passed in the route as a parameter
-    console.log(partnerId)
-
-    // Update the user record with the image URLs
-    const updatedUser = await Partner.findByIdAndUpdate(
-      partnerId,
-      {
-        profilePic: profilePicUrl,
-        aadharPic: aadharPicUrl,
-        pcc: pccUrl,
-      },
-      { new: true } // Return the updated document
-    );
-
+  
+    if (aadharPic && aadharPic[0]) {
+      const [aadharPicUrl] = await uploadMultipleImagesToS3([aadharPic[0]], folderName);
+      updateFields.aadharPic = aadharPicUrl;
+    }
+  
+    if (pcc && pcc[0]) {
+      const [pccUrl] = await uploadMultipleImagesToS3([pcc[0]], folderName);
+      updateFields.pcc = pccUrl;
+    }
+  
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).send({
+        statusCode: 400,
+        message: "No images provided for upload.",
+      });
+    }
+  
+    const updatedUser = await Partner.findByIdAndUpdate(partnerId, updateFields, {
+      new: true,
+    });
+  
     if (!updatedUser) {
-      return res
-        .status(404)
-        .send({ statusCode: 404, message: "User not found." });
+      return res.status(404).send({ statusCode: 404, message: "User not found." });
     }
-
-    // Respond with success
+  
     res.status(200).send({
       statusCode: 200,
-      message: "Images uploaded and URLs saved successfully.",
+      message: "Images uploaded and updated successfully.",
       data: updatedUser,
     });
-  } catch (err) {
-    const errorMsg = err.message || "Unknown error";
-    res.status(500).send({ statusCode: 500, message: errorMsg });
+  } catch (error) {
+    console.error("Upload error:", error);
+    res.status(500).send({
+      statusCode: 500,
+      message: "Something went wrong during image upload.",
+      error: error.message,
+    });
   }
+  
 };
 
 
