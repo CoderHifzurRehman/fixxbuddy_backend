@@ -166,8 +166,8 @@ exports.deleteMainServices = async (req, res) => {
       });
     }
 
-    // Delete the vehicle
-    await Mainservices.deleteOne({ _id: mainservice });
+    // Delete the mainService
+    await Mainservices.deleteOne({ _id: mainServiceId });
 
     res.status(200).send({
       statusCode: 200,
@@ -195,7 +195,7 @@ exports.getAllServices = async (req, res) => {
       query
     );
 
-    // console.log(booking);
+    // console.log(services);
     if (services.data.length === 0) {
       return res.status(404).send({
         statusCode: 404,
