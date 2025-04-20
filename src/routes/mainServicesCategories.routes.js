@@ -21,7 +21,8 @@ router.put('/update/:id', upload.single('file'), mainServicesCategoriesControlle
 
 
 // Route to get a single main service by ID
-router.get('/:id', mainServicesCategoriesController.getSingleMainServiceCategories);
+router.get('/:id', mainServicesCategoriesController.getSingleMainServiceCategories); 
+router.get('/list/:id', mainServicesCategoriesController.getMainServiceCategoriesList);
 
 // Route to get a single main service by service name (alternative)
 router.get('/name/:name', mainServicesCategoriesController.getSingleMainServiceCategoriesByName);

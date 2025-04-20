@@ -125,6 +125,35 @@ exports.getSingleMainServiceCategories = async (req, res) => {
   }
 };
 
+//getMainServiceCategoriesList
+
+exports.getMainServiceCategoriesList = async (req, res) => {
+  try {
+    const serviceId = req.params.id; // Get the serviceId from the URL parameter
+
+    // Find the service by its ID
+    const servicecategories = await MainservicesCategories.find({ mainServiceId : serviceId});
+
+    if (!servicecategories) {
+      return res.status(404).send({
+        statusCode: 404,
+        message: "Service categories not found.",
+      });
+    }
+
+    // Send the service data in the response
+    res.status(200).send({
+      statusCode: 200,
+      message: "Service categories retrieved successfully.",
+      data: servicecategories,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+
 // Get a single main service by service name
 exports.getSingleMainServiceCategoriesByName = async (req, res) => {
   try {
