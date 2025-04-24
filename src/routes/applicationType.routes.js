@@ -23,6 +23,8 @@ router.put('/update/:id', upload.single('file'), applicationTypeController.updat
 // Route to get a single main service by ID
 router.get('/:id', applicationTypeController.getSingleApplicationType);
 
+router.get('/list/:id', applicationTypeController.getApplicationTypeList);
+
 // Route to get a single main service by service name (alternative)
 router.get('/name/:name', applicationTypeController.getSingleApplicationTypeByName);
 

@@ -123,6 +123,35 @@ exports.getSingleApplicationType= async (req, res) => {
   }
 };
 
+//getApplicationTypeList
+
+exports.getApplicationTypeList = async (req, res) => {
+  try {
+    const mainServiceCategorieId = req.params.id; // Get the mainServiceCategoryId from the URL parameter
+
+    // Find the service by its ID
+    const applicationtype = await ApplicationType.find({ mainServiceCategoryId : mainServiceCategorieId});
+
+    if (!applicationtype) {
+      return res.status(404).send({
+        statusCode: 404,
+        message: "Applicationtype not found.",
+      });
+    }
+
+    // Send the service data in the response
+    res.status(200).send({
+      statusCode: 200,
+      message: "Service categories retrieved successfully.",
+      data: applicationtype,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+
 // Get a single main service by service name
 exports.getSingleApplicationTypeByName = async (req, res) => {
   try {
