@@ -128,7 +128,6 @@ exports.getSingleApplicationType= async (req, res) => {
 exports.getApplicationTypeList = async (req, res) => {
   try {
     const mainServiceCategorieId = req.params.id; // Get the mainServiceCategoryId from the URL parameter
-    console.log(mainServiceCategorieId)
     // Find the service by its ID
     const applicationtype = await ApplicationType.find({ mainServiceCategoriesId : mainServiceCategorieId});
 
