@@ -1,17 +1,17 @@
-const ApplicationType = require("../models/applicationType.model");
+const ServiceType = require("../models/serviceType.model");
 
 const {
   uploadSingleImageToS3,
   uploadMultipleImagesToS3,
 } = require("../utils/uploadImages");
 
-exports.createApplicationType = async (req, res) => {
+exports.createServiceType = async (req, res) => {
   try {
     const {mainServiceCategoriesId, serviceHeading, serviceName, serviceDescription } = req.body;
 
     // Check if a service with the same name already exists
-    const existingApplicationType = await ApplicationType.findOne({ serviceName });
-    if (existingApplicationType) {
+    const existingServiceType = await ServiceType.findOne({ serviceName });
+    if (existingServiceType) {
       return res.status(400).send({
         statusCode: 400,
         message: "Service name already exists. Please choose a different name.",
@@ -22,14 +22,14 @@ exports.createApplicationType = async (req, res) => {
     if (!file) {
       return res.status(400).send("No file uploaded.");
     }
-    const folderName = `partner/applicationType/${serviceName}`; // Customize the folder name if needed
+    const folderName = `partner/serviceType/${serviceName}`; // Customize the folder name if needed
     // console.log(folderName);
 
     const serviceImage = await uploadSingleImageToS3(file, folderName);
     // console.log(imageUrl);
 
     // Proceed to create a new user
-    const newapplicationType = new ApplicationType({
+    const newserviceType = new ServiceType({
       mainServiceCategoriesId,
       serviceHeading,
       serviceName,
@@ -38,7 +38,7 @@ exports.createApplicationType = async (req, res) => {
     });
 
     // Save the new user to the database
-    const savedMainservices = await newapplicationType.save();
+    const savedMainservices = await newserviceType.save();
 
     res.status(201).send({
       statusCode: 201,
@@ -52,13 +52,13 @@ exports.createApplicationType = async (req, res) => {
 };
 
 // Update an existing main service
-exports.updateApplicationType = async (req, res) => {
+exports.updateServiceType = async (req, res) => {
   try {
     const { mainServiceCategoriesId, serviceName, serviceHeading, serviceDescription } = req.body;
     const serviceId = req.params.id; // Assuming you're using the service's ID for updates
 
     // Find the service by ID
-    const service = await ApplicationType.findById(serviceId);
+    const service = await ServiceType.findById(serviceId);
     if (!service) {
       return res.status(404).send({
         statusCode: 404,
@@ -71,7 +71,7 @@ exports.updateApplicationType = async (req, res) => {
     let serviceImage = service.serviceImage; // Keep the existing image unless a new one is uploaded
 
     if (file) {
-      const folderName = `partner/applicationType/${serviceName}`;
+      const folderName = `partner/serviceType/${serviceName}`;
       serviceImage = await uploadSingleImageToS3(file, folderName);
     }
     // Update the service data
@@ -96,12 +96,12 @@ exports.updateApplicationType = async (req, res) => {
 };
 
 // Get a single main service by service ID
-exports.getSingleApplicationType= async (req, res) => {
+exports.getSingleServiceType= async (req, res) => {
   try {
     const serviceId = req.params.id; // Get the serviceId from the URL parameter
 
     // Find the service by its ID
-    const service = await ApplicationType.findById(serviceId);
+    const service = await ServiceType.findById(serviceId);
 
     if (!service) {
       return res.status(404).send({
@@ -122,13 +122,13 @@ exports.getSingleApplicationType= async (req, res) => {
   }
 };
 
-//getApplicationTypeList
+//getServiceTypeList
 
-exports.getApplicationTypeList = async (req, res) => {
+exports.getServiceTypeList = async (req, res) => {
   try {
     const mainServiceCategorieId = req.params.id; // Get the mainServiceCategoryId from the URL parameter
     // Find the service by its ID
-    const applicationtype = await ApplicationType.find({ mainServiceCategoriesId : mainServiceCategorieId});
+    const applicationtype = await ServiceType.find({ mainServiceCategoriesId : mainServiceCategorieId});
 
     if (!applicationtype) {
       return res.status(404).send({
@@ -151,12 +151,12 @@ exports.getApplicationTypeList = async (req, res) => {
 
 
 // Get a single main service by service name
-exports.getSingleApplicationTypeByName = async (req, res) => {
+exports.getSingleServiceTypeByName = async (req, res) => {
   try {
     const serviceName = req.params.name; // Get the serviceName from the URL parameter
 
     // Find the service by its name
-    const service = await ApplicationType.findOne({ serviceName });
+    const service = await ServiceType.findOne({ serviceName });
 
     if (!service) {
       return res.status(404).send({
@@ -179,12 +179,12 @@ exports.getSingleApplicationTypeByName = async (req, res) => {
 
 //deleteServices
 
-exports.deleteApplicationType = async (req, res) => {
+exports.deleteServiceType = async (req, res) => {
   try {
     const mainServiceId = req.params.id;
 
     // Assuming you're using a MongoDB model called Mainservice
-    const mainservice = await ApplicationType.findById(mainServiceId);
+    const mainservice = await ServiceType.findById(mainServiceId);
 
     // Check if the vehicle exists
     if (!mainservice) {
@@ -195,7 +195,7 @@ exports.deleteApplicationType = async (req, res) => {
     }
 
     // Delete the mainService
-    await ApplicationType.deleteOne({ _id: mainServiceId });
+    await ServiceType.deleteOne({ _id: mainServiceId });
 
     res.status(200).send({
       statusCode: 200,
@@ -208,7 +208,7 @@ exports.deleteApplicationType = async (req, res) => {
 };
 
 //get all services
-exports.getAllApplicationType = async (req, res) => {
+exports.getAllServiceType = async (req, res) => {
   try {
     const page = req.query.page || 1;
     const limit = req.query.limit || 50;
@@ -247,14 +247,14 @@ exports.MainServicesPagination = async (page, limit, sorted, query) => {
   try {
     const skip = (page - 1) * limit;
 
-    const data = await ApplicationType.find(query)
+    const data = await ServiceType.find(query)
       .sort(sorted)
       .skip(skip)
       .limit(limit)
       .lean();
 
     // Get the total count for pagination metadata
-    const totalCount = await ApplicationType.countDocuments(query);
+    const totalCount = await ServiceType.countDocuments(query);
 
     // Calculate pagination info
     const totalPages = Math.ceil(totalCount / limit);

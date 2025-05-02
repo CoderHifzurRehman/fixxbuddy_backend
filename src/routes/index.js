@@ -6,6 +6,7 @@ const partnerRoutes = require("./partner.routes");
 const mainServicesRoutes = require("./mainServices.routes")
 const mainServicesCategoriesRoutes = require("./mainServicesCategories.routes")
 const applicationTypeRoutes = require("./applicationType.routes")
+const serviceTypeRoutes = require("./serviceType.routes")
 
 
 const router = express.Router();
@@ -26,6 +27,8 @@ router.use("/mainservicescategories", mainServicesCategoriesRoutes)
 
 //application Type categories
 router.use("/applicationType", applicationTypeRoutes)
+
+router.use("/serviceType", serviceTypeRoutes)
 
 
 module.exports = router;
