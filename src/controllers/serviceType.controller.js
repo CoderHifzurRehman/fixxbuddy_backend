@@ -7,7 +7,7 @@ const {
 
 exports.createServiceType = async (req, res) => {
   try {
-    const {mainServiceCategoriesId, serviceHeading, serviceName, serviceDescription } = req.body;
+    const {applicationTypeId, serviceHeading, serviceName, serviceDescription, serviceCost, serviceDetails } = req.body;
 
     // Check if a service with the same name already exists
     const existingServiceType = await ServiceType.findOne({ serviceName });
@@ -30,11 +30,13 @@ exports.createServiceType = async (req, res) => {
 
     // Proceed to create a new user
     const newserviceType = new ServiceType({
-      mainServiceCategoriesId,
+      applicationTypeId,
       serviceHeading,
       serviceName,
       serviceDescription,
       serviceImage,
+      serviceCost,
+      serviceDetails
     });
 
     // Save the new user to the database
@@ -54,7 +56,7 @@ exports.createServiceType = async (req, res) => {
 // Update an existing main service
 exports.updateServiceType = async (req, res) => {
   try {
-    const { mainServiceCategoriesId, serviceName, serviceHeading, serviceDescription } = req.body;
+    const { applicationTypeId, serviceName, serviceHeading, serviceDescription, serviceCost, serviceDetails } = req.body;
     const serviceId = req.params.id; // Assuming you're using the service's ID for updates
 
     // Find the service by ID
@@ -75,7 +77,7 @@ exports.updateServiceType = async (req, res) => {
       serviceImage = await uploadSingleImageToS3(file, folderName);
     }
     // Update the service data
-    service.mainServiceCategoriesId = mainServiceCategoriesId || service.mainServiceCategoriesId;
+    service.applicationTypeId = applicationTypeId || service.applicationTypeId;
     service.serviceHeading = serviceHeading || service.serviceHeading;
     service.serviceDescription = serviceDescription || service.serviceDescription;
     service.serviceName = serviceName || service.serviceName;
@@ -128,7 +130,7 @@ exports.getServiceTypeList = async (req, res) => {
   try {
     const mainServiceCategorieId = req.params.id; // Get the mainServiceCategoryId from the URL parameter
     // Find the service by its ID
-    const applicationtype = await ServiceType.find({ mainServiceCategoriesId : mainServiceCategorieId});
+    const applicationtype = await ServiceType.find({ applicationTypeId : mainServiceCategorieId});
 
     if (!applicationtype) {
       return res.status(404).send({
