@@ -81,6 +81,8 @@ exports.updateServiceType = async (req, res) => {
     service.serviceHeading = serviceHeading || service.serviceHeading;
     service.serviceDescription = serviceDescription || service.serviceDescription;
     service.serviceName = serviceName || service.serviceName;
+    service.serviceCost = serviceCost || service.serviceCost;
+    service.serviceDetails = serviceDetails || service.serviceDetails;
     service.serviceImage = serviceImage;
 
     // Save the updated service
