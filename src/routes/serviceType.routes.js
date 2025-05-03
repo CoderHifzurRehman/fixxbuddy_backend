@@ -17,7 +17,7 @@ router.post("/create",  upload.single('image') , serviceTypeController.createSer
 router.get("/", serviceTypeController.getAllServiceType)
 
 // Route to update an existing main service
-router.put('/update/:id', upload.single('file'), serviceTypeController.updateServiceType);
+router.put('/update/:id', upload.single('image'), serviceTypeController.updateServiceType);
 
 
 // Route to get a single main service by ID
