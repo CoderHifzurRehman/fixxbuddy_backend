@@ -11,12 +11,12 @@ exports.createServiceType = async (req, res) => {
 
     // Check if a service with the same name already exists
     const existingServiceType = await ServiceType.findOne({ serviceName });
-    if (existingServiceType) {
-      return res.status(400).send({
-        statusCode: 400,
-        message: "Service name already exists. Please choose a different name.",
-      });
-    }
+    // if (existingServiceType) {
+    //   return res.status(400).send({
+    //     statusCode: 400,
+    //     message: "Service name already exists. Please choose a different name.",
+    //   });
+    // }
 
     const { file } = req;
     if (!file) {
