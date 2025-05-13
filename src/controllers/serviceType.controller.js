@@ -18,14 +18,14 @@ exports.createServiceType = async (req, res) => {
     //   });
     // }
 
-    const { file } = req;
-    if (!file) {
-      return res.status(400).send("No file uploaded.");
+    const files = req.files;
+    if (!files || files.length === 0) {
+      return res.status(400).send({ message: "No images uploaded." });
     }
     const folderName = `partner/serviceType/${serviceName}`; // Customize the folder name if needed
     // console.log(folderName);
 
-    const serviceImage = await uploadSingleImageToS3(file, folderName);
+    const serviceImage = await uploadMultipleImagesToS3(files, folderName);
     // console.log(imageUrl);
 
     // Proceed to create a new user
