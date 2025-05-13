@@ -12,13 +12,13 @@ const router = express.Router();
 
 //base url
 //   /api/mainservicesCategories
-router.post("/create", upload.array('serviceImage', 15), serviceTypeController.createServiceType);
+router.post("/create", upload.array('serviceImages', 15), serviceTypeController.createServiceType);
 // 'serviceImages' is the field name, 15 is the max number of images allowed
 
 router.get("/", serviceTypeController.getAllServiceType)
 
 // Route to update an existing main service
-router.put('/update/:id', upload.array('serviceImage', 15), serviceTypeController.updateServiceType);
+router.put('/update/:id', upload.array('serviceImages', 15), serviceTypeController.updateServiceType);
 
 
 // Route to get a single main service by ID

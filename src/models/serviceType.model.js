@@ -41,7 +41,7 @@ const serviceTypeSchema = new mongoose.Schema(
       default:true,
     },
     serviceImage:{
-      type:String,
+      type:[String],
       default:"",
     },
   },
