@@ -7,7 +7,7 @@ const {
 
 exports.createServiceType = async (req, res) => {
   try {
-    const {applicationTypeId, serviceHeading, serviceName, serviceDescription, serviceCost, serviceDetails } = req.body;
+    const {applicationTypeId, serviceHeading, serviceName, serviceDescription, serviceCost, serviceDetails, serviceVideoLink } = req.body;
 
     // Check if a service with the same name already exists
     const existingServiceType = await ServiceType.findOne({ serviceName });
@@ -36,7 +36,8 @@ exports.createServiceType = async (req, res) => {
       serviceDescription,
       serviceImage,
       serviceCost,
-      serviceDetails
+      serviceDetails,
+      serviceVideoLink
     });
 
     // Save the new user to the database
@@ -56,7 +57,7 @@ exports.createServiceType = async (req, res) => {
 // Update an existing main service
 exports.updateServiceType = async (req, res) => {
   try {
-    const { applicationTypeId, serviceName, serviceHeading, serviceDescription, serviceCost, serviceDetails } = req.body;
+    const { applicationTypeId, serviceName, serviceHeading, serviceDescription, serviceCost, serviceDetails, serviceVideoLink } = req.body;
     const serviceId = req.params.id; // Assuming you're using the service's ID for updates
 
     // Find the service by ID
@@ -83,6 +84,7 @@ exports.updateServiceType = async (req, res) => {
     service.serviceName = serviceName || service.serviceName;
     service.serviceCost = serviceCost || service.serviceCost;
     service.serviceDetails = serviceDetails || service.serviceDetails;
+    service.serviceVideoLink = serviceVideoLink || service.serviceVideoLink;
     service.serviceImage = serviceImage;
 
     // Save the updated service
