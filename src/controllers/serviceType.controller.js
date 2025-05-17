@@ -85,7 +85,7 @@ exports.updateServiceType = async (req, res) => {
     service.serviceCost = serviceCost || service.serviceCost;
     service.serviceDetails = serviceDetails || service.serviceDetails;
     service.serviceVideoLink = serviceVideoLink || service.serviceVideoLink;
-    service.serviceImages = serviceImages;
+    service.serviceImage = serviceImages;
 
     // Save the updated service
     const updatedService = await service.save();
