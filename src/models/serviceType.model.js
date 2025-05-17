@@ -39,7 +39,6 @@ const serviceTypeSchema = new mongoose.Schema(
     serviceVideoLink: {
         type: String,
         trim: true,
-        lowercase: true,
         default:''
     },   
     isActive: {
