@@ -70,13 +70,13 @@ exports.updateServiceType = async (req, res) => {
     }
 
     // Optionally update the image if a new one is uploaded
-    const { file } = req;
-    let serviceImage = service.serviceImage; // Keep the existing image unless a new one is uploaded
-
-    if (file) {
-      const folderName = `partner/serviceType/${serviceName}`;
-      serviceImage = await uploadSingleImageToS3(file, folderName);
+    const files = req.files;
+    if (!files || files.length === 0) {
+      return res.status(400).send({ message: "No images uploaded." });
     }
+
+    const folderName = `partner/serviceType/${serviceName}`;
+    const serviceImages = await uploadMultipleImagesToS3(files, folderName); // returns array of URLs
     // Update the service data
     service.applicationTypeId = applicationTypeId || service.applicationTypeId;
     service.serviceHeading = serviceHeading || service.serviceHeading;
@@ -85,7 +85,7 @@ exports.updateServiceType = async (req, res) => {
     service.serviceCost = serviceCost || service.serviceCost;
     service.serviceDetails = serviceDetails || service.serviceDetails;
     service.serviceVideoLink = serviceVideoLink || service.serviceVideoLink;
-    service.serviceImage = serviceImage;
+    service.serviceImages = serviceImages;
 
     // Save the updated service
     const updatedService = await service.save();
