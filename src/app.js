@@ -2,7 +2,6 @@
 require('dotenv').config();
 const connectDB=require('./config/db');
 const express = require('express');
-const cors = require("cors"); //for cors remove
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const routes = require('./routes/index');
@@ -12,25 +11,26 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
+app.use(express.json());
+// Enable CORS for all routes
+const cors = require("cors");
 
-// CORS configuration to allow only localhost with any port
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || /^http:\/\/localhost:\d+$/.test(origin)) {
+    // Allow all localhost ports and your production frontend
+    if (!origin || origin.startsWith("http://localhost") || origin === "https://your-frontend-domain.com") {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
     }
   },
-  credentials: true, // only if you're using cookies or authorization headers
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true, // Only if needed
 };
 
 app.use(cors(corsOptions));
 
-
-app.use(express.json());
-// Enable CORS for all routes
-app.use(cors());
 
 const logStream = fs.createWriteStream(path.join(__dirname, 'requests.log'), { flags: 'a' });
 
