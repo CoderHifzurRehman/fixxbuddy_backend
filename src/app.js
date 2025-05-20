@@ -2,6 +2,7 @@
 require('dotenv').config();
 const connectDB=require('./config/db');
 const express = require('express');
+const cors = require("cors"); //for cors remove
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const routes = require('./routes/index');
@@ -11,6 +12,22 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
+
+// CORS configuration to allow only localhost with any port
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || /^http:\/\/localhost:\d+$/.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true, // only if you're using cookies or authorization headers
+};
+
+app.use(cors(corsOptions));
+
+
 app.use(express.json());
 // Enable CORS for all routes
 app.use(cors());
