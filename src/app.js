@@ -13,8 +13,6 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 // Enable CORS for all routes
-const cors = require("cors");
-
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow all localhost ports and your production frontend
