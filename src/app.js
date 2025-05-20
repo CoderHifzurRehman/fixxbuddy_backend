@@ -13,22 +13,7 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 // Enable CORS for all routes
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow all localhost ports and your production frontend
-    if (!origin || origin.startsWith("http://localhost") || origin === "https://your-frontend-domain.com") {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true, // Only if needed
-};
-
-app.use(cors(corsOptions));
-
+app.use(cors());
 
 const logStream = fs.createWriteStream(path.join(__dirname, 'requests.log'), { flags: 'a' });
 
