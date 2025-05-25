@@ -22,7 +22,7 @@ exports.createMainServiceCategories = async (req, res) => {
     if (!file) {
       return res.status(400).send("No file uploaded.");
     }
-    const folderName = `partner/mainservicesCategories/${serviceName}`; // Customize the folder name if needed
+    const folderName = `services/mainservicesCategories/${serviceName}`; // Customize the folder name if needed
     // console.log(folderName);
 
     const serviceImage = await uploadSingleImageToS3(file, folderName);
@@ -72,7 +72,7 @@ exports.updateMainServiceCategories = async (req, res) => {
     let serviceImage = service.serviceImage; // Keep the existing image unless a new one is uploaded
 
     if (file) {
-      const folderName = `partner/mainservicesCategories/${serviceName}`;
+      const folderName = `services/mainservicesCategories/${serviceName}`;
       serviceImage = await uploadSingleImageToS3(file, folderName);
     }
 

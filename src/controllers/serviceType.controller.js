@@ -22,7 +22,7 @@ exports.createServiceType = async (req, res) => {
     if (!files || files.length === 0) {
       return res.status(400).send({ message: "No images uploaded." });
     }
-    const folderName = `partner/serviceType/${serviceName}`; // Customize the folder name if needed
+    const folderName = `services/serviceType/${serviceName}`; // Customize the folder name if needed
     // console.log(folderName);
 
     const serviceImage = await uploadMultipleImagesToS3(files, folderName);
@@ -75,7 +75,7 @@ exports.updateServiceType = async (req, res) => {
       return res.status(400).send({ message: "No images uploaded." });
     }
 
-    const folderName = `partner/serviceType/${serviceName}`;
+    const folderName = `services/serviceType/${serviceName}`;
     const serviceImages = await uploadMultipleImagesToS3(files, folderName); // returns array of URLs
     // Update the service data
     service.applicationTypeId = applicationTypeId || service.applicationTypeId;
