@@ -1,3 +1,4 @@
+const bcrypt = require("bcryptjs");
 const { sendEmail } = require("../config/email");
 const User = require("../models/user.model");
 const { generateToken } = require("../utils/jwt");
@@ -7,9 +8,26 @@ const {
   uploadMultipleImagesToS3,
 } = require("../utils/uploadImages");
 
+
+const validatePasswordStrength = (password) => {
+  const minLength = 8;
+
+  // Regular expression for:
+  // 1. At least one uppercase letter (A-Z)
+  // 2. At least one lowercase letter (a-z)
+  // 3. At least one digit (0-9)
+  // 4. At least one special character (e.g. @$!%?&)
+  // 5. Minimum 8 characters
+  // Regex to check the password rules
+  const regex =
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+={}\[\]|\\:;'"<>,.?/`~]).{8,16}$/;
+
+  return password.length >= minLength && regex.test(password);
+};
+
 exports.userRegistration = async (req, res) => {
   try {
-    const { firstName, lastName, email } = req.body;
+    const { firstName, lastName, email, password } = req.body;
 
     const { file } = req;
     if (!file) {
@@ -29,12 +47,22 @@ exports.userRegistration = async (req, res) => {
       });
     }
 
+    // Check if password is strong enough
+    if (!validatePasswordStrength(password)) {
+      return res.status(400).send({
+        statusCode: 409,
+        message:
+          "Password must be at least 8-16 characters long and contain a mix of uppercase, lowercase, numbers, and special characters.",
+      });
+    }
+
     // Proceed to create a new user
     const newUser = new User({
       firstName,
       lastName,
       email,
       imageUrl,
+      password,
     });
 
     // Save the new user to the database
@@ -67,7 +95,7 @@ exports.userRegistration = async (req, res) => {
 
 exports.userLogin = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, password } = req.body;
 
     const user = await User.findOne({ email });
 
@@ -76,6 +104,28 @@ exports.userLogin = async (req, res) => {
         statusCode: 404,
         message: "User not found.",
       });
+    }
+
+    if(user.isEmailVerified){
+
+      const token = generateToken(user);
+
+      // Compare the provided password with the stored hashed password
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
+
+     if (!isPasswordMatch) {
+      return res.status(400).send({
+        statusCode: 400,
+        message: "Invalid password.",
+      });
+    }
+     res.status(200).send({
+      statusCode: 200,
+      message: "OTP verified successfully.",
+      data: user,
+      token: token,
+    });
+
     }
     // Generate OTP (6-digit random number)
     const otp = Math.floor(100000 + Math.random() * 900000); // Generates a 6-digit OTP
@@ -182,7 +232,7 @@ exports.getUserProfile = async (req, res) => {
     // console.log(req.user)
     // return
     // Fetch the user profile from the database
-    const user = await User.findById(userId).select("-otp otpExpiry ");
+    const user = await User.findById(userId).select("-otp -otpExpiry");
 
     if (!user) {
       return res
