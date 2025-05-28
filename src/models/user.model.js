@@ -22,6 +22,9 @@ const userSchema = new mongoose.Schema(
       unique: true, // Ensures email is unique
       match: /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/, // Validates email format
     },
+    password :{
+      type: String,
+    },
     otp: {
       type: Number,
       default: null, // Can be null when OTP is not in use
@@ -52,6 +55,18 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
+
+// Compare the given password with the stored hashed password
+userSchema.methods.comparePassword = async function (password) {
+  return await bcrypt.compare(password, this.password);
+};
 
 const User = mongoose.model('user', userSchema);
 
