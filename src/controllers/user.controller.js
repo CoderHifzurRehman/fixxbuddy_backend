@@ -8,7 +8,6 @@ const {
   uploadMultipleImagesToS3,
 } = require("../utils/uploadImages");
 
-
 const validatePasswordStrength = (password) => {
   const minLength = 8;
 
@@ -106,47 +105,46 @@ exports.userLogin = async (req, res) => {
       });
     }
 
-    if(user.isEmailVerified){
-
+    if (user.isEmailVerified) {
       const token = generateToken(user);
 
       // Compare the provided password with the stored hashed password
-    const isPasswordMatch = await bcrypt.compare(password, user.password);
+      const isPasswordMatch = await bcrypt.compare(password, user.password);
 
-     if (!isPasswordMatch) {
-      return res.status(400).send({
-        statusCode: 400,
-        message: "Invalid password.",
+      if (!isPasswordMatch) {
+        return res.status(400).send({
+          statusCode: 400,
+          message: "Invalid password.",
+        });
+      }
+      return res.status(200).send({
+        statusCode: 200,
+        message: "Login successfully.",
+        data: user,
+        token: token,
+      });
+    } else {
+      // Generate OTP (6-digit random number)
+      const otp = Math.floor(100000 + Math.random() * 900000); // Generates a 6-digit OTP
+      // console.log(otp, "otp in the login ");
+      // Set OTP expiration time to 10 minutes from now
+      const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      // Update the user with new OTP and expiry
+      user.otp = otp;
+      user.otpExpiry = otpExpiry;
+
+      // Save the updated user
+      await user.save();
+
+      const subject = "Your OTP Code for Account Verification";
+      await sendEmail(subject, user.email, otpMailTemplate(user));
+
+      res.status(200).send({
+        statusCode: 200,
+        message: "Otp send to user email successfully.",
       });
     }
-     res.status(200).send({
-      statusCode: 200,
-      message: "OTP verified successfully.",
-      data: user,
-      token: token,
-    });
-
-    }
-    // Generate OTP (6-digit random number)
-    const otp = Math.floor(100000 + Math.random() * 900000); // Generates a 6-digit OTP
-    // console.log(otp, "otp in the login ");
-    // Set OTP expiration time to 10 minutes from now
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    // Update the user with new OTP and expiry
-    user.otp = otp;
-    user.otpExpiry = otpExpiry;
-
-    // Save the updated user
-    await user.save();
-
-    const subject = "Your OTP Code for Account Verification";
-    await sendEmail(subject, user.email, otpMailTemplate(user));
-
-    res.status(200).send({
-      statusCode: 200,
-      message: "user login successfully.",
-    });
   } catch (err) {
     const errorMsg = err.message || "Unknown error";
     res.status(500).send({ statusCode: 500, message: errorMsg });
