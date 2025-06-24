@@ -59,7 +59,7 @@ const addToCart = async (req, res) => {
 // @access  Private
 const getCartItems = async (req, res) => {
   try {
-    const cartItems = await Cart.find({ userId: req.user._id });
+    const cartItems = await Cart.find({ userId: req.user.id });
     res.status(200).json({
       success: true,
       count: cartItems.length,
@@ -84,7 +84,7 @@ const updateCartItem = async (req, res) => {
     const updatedItem = await Cart.findOneAndUpdate(
       { 
         _id: req.params.cartItemId, 
-        userId: req.user._id 
+        userId: req.user.id 
       },
       { quantity },
       { new: true }
@@ -117,7 +117,7 @@ const removeFromCart = async (req, res) => {
   try {
     const deletedItem = await Cart.findOneAndDelete({ 
       _id: req.params.cartItemId, 
-      userId: req.user._id 
+      userId: req.user.id 
     });
 
     if (!deletedItem) {
@@ -145,7 +145,7 @@ const removeFromCart = async (req, res) => {
 // @access  Private
 const clearCart = async (req, res) => {
   try {
-    await Cart.deleteMany({ userId: req.user._id });
+    await Cart.deleteMany({ userId: req.user.id });
     res.status(200).json({
       success: true,
       data: {}
