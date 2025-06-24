@@ -19,7 +19,7 @@ const addToCart = async (req, res) => {
 
     // Rest of your existing code...
     const existingItem = await Cart.findOne({ 
-      userId: req.user._id, 
+      userId: req.user.id, 
       serviceId 
     });
 
@@ -31,7 +31,7 @@ const addToCart = async (req, res) => {
     }
 
     const cartItem = await Cart.create({
-      userId: req.user._id,
+      userId: req.user.id,
       serviceId,
       serviceName,
       serviceCost: Number(serviceCost), // Ensure number type
