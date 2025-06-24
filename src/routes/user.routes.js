@@ -1,23 +1,30 @@
 const express = require('express');
+const userController = require('../controllers/user.controller');
+const multer = require('multer');
+// Set up Multer for file upload handling
+const storage = multer.memoryStorage(); // Store files in memory for easier uploading
+const upload = multer({ storage });
+
+const {authMiddleware, authorizeRoles } = require('../middlewares/authMiddleware');
 const router = express.Router();
-const { authMiddleware } = require('../middlewares/authMiddleware');
-const cartController = require('../controllers/cart.controller');
 
-// Base URL: /api/cart
 
-// Add item to cart (authenticated users only)
-router.post('/add', authMiddleware, cartController.addToCart);
 
-// Get user's cart items (authenticated users only)
-router.get('/list', authMiddleware, cartController.getCartItems);
+//base url
+//   /api/users
+router.post("/registration",  upload.single('image') , userController.userRegistration);
+router.post("/login", userController.userLogin);
+router.post("/verifyotp", userController.verifyOtp);
 
-// Update cart item quantity (authenticated users only)
-router.put('/update/:cartItemId', authMiddleware, cartController.updateCartItem);
+router.get("/profile", authMiddleware, userController.getUserProfile);
 
-// Remove item from cart (authenticated users only)
-router.delete('/remove/:cartItemId', authMiddleware, cartController.removeFromCart);
+router.patch("/update/profile/:id",upload.single('image'), userController.updateUserProfile);
 
-// Clear entire cart (authenticated users only)
-router.delete('/clear', authMiddleware, cartController.clearCart);
+
+
+
+
+
+
 
 module.exports = router;
