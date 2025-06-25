@@ -110,6 +110,42 @@ const updateCartItem = async (req, res) => {
   }
 };
 
+// @desc    Update cart item status
+// @route   PUT /api/cart/update-status/:cartItemId
+// @access  Private
+const updateCartItemStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    
+    const updatedItem = await Cart.findOneAndUpdate(
+      { 
+        _id: req.params.cartItemId, 
+        userId: req.user.id 
+      },
+      { status },
+      { new: true }
+    );
+
+    if (!updatedItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cart item not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: updatedItem
+    });
+  } catch (error) {
+    console.error('Error updating cart item status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating cart item status'
+    });
+  }
+};
+
 // @desc    Remove item from cart
 // @route   DELETE /api/cart/remove/:cartItemId
 // @access  Private
@@ -163,6 +199,7 @@ module.exports = {
   addToCart,
   getCartItems,
   updateCartItem,
+  updateCartItemStatus,
   removeFromCart,
   clearCart
 };
