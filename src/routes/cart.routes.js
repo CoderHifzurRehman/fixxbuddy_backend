@@ -15,7 +15,7 @@ router.get('/list', authMiddleware, cartController.getCartItems);
 router.put('/update/:cartItemId', authMiddleware, cartController.updateCartItem);
 
 // Update cart status item quantity (authenticated users only)
-router.put('/update-status/:cartItemId', protect, updateCartItemStatus); // Add this line
+router.put('/update-status/:cartItemId', authMiddleware, cartController.updateCartItemStatus); // Add this line
 
 // Remove item from cart (authenticated users only)
 router.delete('/remove/:cartItemId', authMiddleware, cartController.removeFromCart);
