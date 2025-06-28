@@ -59,7 +59,10 @@ const addToCart = async (req, res) => {
 // @access  Private
 const getCartItems = async (req, res) => {
   try {
-    const cartItems = await Cart.find({ userId: req.user.id });
+    const cartItems = await Cart.find({
+        userId: req.user.id,
+        status: 'addToCart' // Only return items with this status
+    });
     res.status(200).json({
       success: true,
       count: cartItems.length,
