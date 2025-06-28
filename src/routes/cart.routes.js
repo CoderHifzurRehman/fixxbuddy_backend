@@ -11,6 +11,9 @@ router.post('/add', authMiddleware, cartController.addToCart);
 // Get user's cart items (authenticated users only)
 router.get('/list', authMiddleware, cartController.getCartItems);
 
+// Get user's all order items (authenticated users only)
+router.get('/list-all', authMiddleware, cartController.getAllOrders);
+
 // Update cart item quantity (authenticated users only)
 router.put('/update/:cartItemId', authMiddleware, cartController.updateCartItem);
 

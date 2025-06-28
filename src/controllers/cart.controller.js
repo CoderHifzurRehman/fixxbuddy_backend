@@ -77,6 +77,26 @@ const getCartItems = async (req, res) => {
   }
 };
 
+// @desc    Get all user's orders (all statuses)
+// @route   GET /api/cart/list-all
+// @access  Private
+const getAllOrders = async (req, res) => {
+  try {
+    const orders = await Cart.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      count: orders.length,
+      data: orders
+    });
+  } catch (error) {
+    console.error('Error fetching all orders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching orders'
+    });
+  }
+};
+
 // @desc    Update cart item quantity
 // @route   PUT /api/cart/update/:cartItemId
 // @access  Private
