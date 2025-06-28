@@ -221,6 +221,7 @@ const clearCart = async (req, res) => {
 module.exports = {
   addToCart,
   getCartItems,
+  getAllOrders,
   updateCartItem,
   updateCartItemStatus,
   removeFromCart,
