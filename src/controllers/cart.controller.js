@@ -19,7 +19,8 @@ const addToCart = async (req, res) => {
 
     // Rest of your existing code...
     const existingItem = await Cart.findOne({ 
-      userId: req.user.id, 
+      userId: req.user.id,
+      status: 'addToCart',
       serviceId 
     });
 
@@ -176,7 +177,8 @@ const removeFromCart = async (req, res) => {
   try {
     const deletedItem = await Cart.findOneAndDelete({ 
       _id: req.params.cartItemId, 
-      userId: req.user.id 
+      userId: req.user.id,
+        status: 'addToCart'
     });
 
     if (!deletedItem) {
@@ -204,7 +206,10 @@ const removeFromCart = async (req, res) => {
 // @access  Private
 const clearCart = async (req, res) => {
   try {
-    await Cart.deleteMany({ userId: req.user.id });
+    await Cart.deleteMany({ 
+        userId: req.user.id, 
+        status: 'addToCart' 
+    });
     res.status(200).json({
       success: true,
       data: {}
