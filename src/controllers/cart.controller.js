@@ -98,6 +98,47 @@ const getAllOrders = async (req, res) => {
   }
 };
 
+// @desc    Get orders by status
+// @route   GET /api/cart/orders/:status
+// @access  Private
+const getOrdersByStatus = async (req, res) => {
+  try {
+    const { status } = req.params;
+    
+    // Validate status input
+    const validStatuses = ['pending', 'inProgress', 'completed', 'cancelled', 'all'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status parameter'
+      });
+    }
+
+    let query = { userId: req.user.id };
+    
+    // If status isn't 'all', add status filter
+    if (status !== 'all') {
+      query.status = status;
+    }
+
+    const orders = await Cart.find(query)
+      .sort({ createdAt: -1 })
+      .populate('assignedPartner', 'name specialization phone'); // Optional: populate partner details
+
+    res.status(200).json({
+      success: true,
+      count: orders.length,
+      data: orders
+    });
+  } catch (error) {
+    console.error('Error fetching orders by status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching orders'
+    });
+  }
+};
+
 // @desc    Update cart item quantity
 // @route   PUT /api/cart/update/:cartItemId
 // @access  Private
@@ -227,6 +268,7 @@ module.exports = {
   addToCart,
   getCartItems,
   getAllOrders,
+  getOrdersByStatus,
   updateCartItem,
   updateCartItemStatus,
   removeFromCart,

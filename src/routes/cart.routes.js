@@ -14,11 +14,15 @@ router.get('/list', authMiddleware, cartController.getCartItems);
 // Get user's all order items (authenticated users only)
 router.get('/list-all', authMiddleware, cartController.getAllOrders);
 
+// Get user's all order items (authenticated users only)
+router.get('/orders/:status', authMiddleware, cartController.getOrdersByStatus);
+
 // Update cart item quantity (authenticated users only)
 router.put('/update/:cartItemId', authMiddleware, cartController.updateCartItem);
 
 // Update cart status item quantity (authenticated users only)
 router.put('/update-status/:cartItemId', authMiddleware, cartController.updateCartItemStatus); // Add this line
+
 
 // Remove item from cart (authenticated users only)
 router.delete('/remove/:cartItemId', authMiddleware, cartController.removeFromCart);

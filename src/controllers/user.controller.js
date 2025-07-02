@@ -294,3 +294,320 @@ exports.updateUserProfile = async (req, res) => {
     res.status(500).send({ statusCode: 500, message: errorMsg });
   }
 };
+
+
+// additional ]]
+
+// Add a new address for the user
+exports.addAddress = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { street, city, state, country, postalCode, isPrimary, label } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ statusCode: 404, message: "User not found" });
+    }
+
+    const newAddress = {
+      street,
+      city,
+      state,
+      country,
+      postalCode,
+      isPrimary: isPrimary || false,
+      label: label || 'home'
+    };
+
+    // If setting as primary, ensure no other primary exists
+    if (newAddress.isPrimary) {
+      user.addresses.forEach(addr => {
+        addr.isPrimary = false;
+      });
+    }
+
+    user.addresses.push(newAddress);
+    await user.save();
+
+    res.status(201).json({
+      statusCode: 201,
+      message: "Address added successfully",
+      data: user.addresses,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+// Update an existing address
+exports.updateAddress = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { addressId } = req.params;
+    const updateData = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ statusCode: 404, message: "User not found" });
+    }
+
+    const addressIndex = user.addresses.findIndex(addr => addr._id.toString() === addressId);
+    if (addressIndex === -1) {
+      return res.status(404).json({ statusCode: 404, message: "Address not found" });
+    }
+
+    // If setting as primary, ensure no other primary exists
+    if (updateData.isPrimary) {
+      user.addresses.forEach(addr => {
+        addr.isPrimary = false;
+      });
+    }
+
+    // Update the address
+    user.addresses[addressIndex] = {
+      ...user.addresses[addressIndex].toObject(),
+      ...updateData
+    };
+
+    await user.save();
+
+    res.status(200).json({
+      statusCode: 200,
+      message: "Address updated successfully",
+      data: user.addresses,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+// Delete an address
+exports.deleteAddress = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { addressId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ statusCode: 404, message: "User not found" });
+    }
+
+    const addressIndex = user.addresses.findIndex(addr => addr._id.toString() === addressId);
+    if (addressIndex === -1) {
+      return res.status(404).json({ statusCode: 404, message: "Address not found" });
+    }
+
+    // If deleting primary address, set another as primary if available
+    const wasPrimary = user.addresses[addressIndex].isPrimary;
+    user.addresses.splice(addressIndex, 1);
+
+    if (wasPrimary && user.addresses.length > 0) {
+      user.addresses[0].isPrimary = true;
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      statusCode: 200,
+      message: "Address deleted successfully",
+      data: user.addresses,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+// Set primary address
+exports.setPrimaryAddress = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { addressId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ statusCode: 404, message: "User not found" });
+    }
+
+    const addressIndex = user.addresses.findIndex(addr => addr._id.toString() === addressId);
+    if (addressIndex === -1) {
+      return res.status(404).json({ statusCode: 404, message: "Address not found" });
+    }
+
+    // Set all addresses to non-primary
+    user.addresses.forEach(addr => {
+      addr.isPrimary = false;
+    });
+
+    // Set the selected address as primary
+    user.addresses[addressIndex].isPrimary = true;
+
+    await user.save();
+
+    res.status(200).json({
+      statusCode: 200,
+      message: "Primary address set successfully",
+      data: user.addresses,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+// Add a new contact number
+exports.addContactNumber = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { number, isPrimary, label } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ statusCode: 404, message: "User not found" });
+    }
+
+    const newContact = {
+      number,
+      isPrimary: isPrimary || false,
+      label: label || 'mobile'
+    };
+
+    // If setting as primary, ensure no other primary exists
+    if (newContact.isPrimary) {
+      user.contactNumbers.forEach(contact => {
+        contact.isPrimary = false;
+      });
+    }
+
+    user.contactNumbers.push(newContact);
+    await user.save();
+
+    res.status(201).json({
+      statusCode: 201,
+      message: "Contact number added successfully",
+      data: user.contactNumbers,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+// Update a contact number
+exports.updateContactNumber = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { contactId } = req.params;
+    const updateData = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ statusCode: 404, message: "User not found" });
+    }
+
+    const contactIndex = user.contactNumbers.findIndex(contact => contact._id.toString() === contactId);
+    if (contactIndex === -1) {
+      return res.status(404).json({ statusCode: 404, message: "Contact number not found" });
+    }
+
+    // If setting as primary, ensure no other primary exists
+    if (updateData.isPrimary) {
+      user.contactNumbers.forEach(contact => {
+        contact.isPrimary = false;
+      });
+    }
+
+    // Update the contact
+    user.contactNumbers[contactIndex] = {
+      ...user.contactNumbers[contactIndex].toObject(),
+      ...updateData
+    };
+
+    await user.save();
+
+    res.status(200).json({
+      statusCode: 200,
+      message: "Contact number updated successfully",
+      data: user.contactNumbers,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+// Delete a contact number
+exports.deleteContactNumber = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { contactId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ statusCode: 404, message: "User not found" });
+    }
+
+    const contactIndex = user.contactNumbers.findIndex(contact => contact._id.toString() === contactId);
+    if (contactIndex === -1) {
+      return res.status(404).json({ statusCode: 404, message: "Contact number not found" });
+    }
+
+    // If deleting primary contact, set another as primary if available
+    const wasPrimary = user.contactNumbers[contactIndex].isPrimary;
+    user.contactNumbers.splice(contactIndex, 1);
+
+    if (wasPrimary && user.contactNumbers.length > 0) {
+      user.contactNumbers[0].isPrimary = true;
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      statusCode: 200,
+      message: "Contact number deleted successfully",
+      data: user.contactNumbers,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+// Set primary contact number
+exports.setPrimaryContactNumber = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { contactId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ statusCode: 404, message: "User not found" });
+    }
+
+    const contactIndex = user.contactNumbers.findIndex(contact => contact._id.toString() === contactId);
+    if (contactIndex === -1) {
+      return res.status(404).json({ statusCode: 404, message: "Contact number not found" });
+    }
+
+    // Set all contacts to non-primary
+    user.contactNumbers.forEach(contact => {
+      contact.isPrimary = false;
+    });
+
+    // Set the selected contact as primary
+    user.contactNumbers[contactIndex].isPrimary = true;
+
+    await user.save();
+
+    res.status(200).json({
+      statusCode: 200,
+      message: "Primary contact number set successfully",
+      data: user.contactNumbers,
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};

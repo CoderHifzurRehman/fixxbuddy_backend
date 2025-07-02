@@ -33,13 +33,20 @@ const cartSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['addToCart', 'pending', 'completed', 'cancelled'],
+      enum: ['addToCart', 'pending', 'inProgress', 'completed', 'cancelled'],
       default: 'addToCart'
     },
     quantity: {
       type: Number,
       default: 1
-    }
+    },
+    assignedPartner: { type: mongoose.Schema.Types.ObjectId, ref: 'Partner' },
+    scheduledDate: Date,
+    tracking: [{
+        message: String,
+        date: { type: Date, default: Date.now },
+        status: String
+    }]
   },
   {
     timestamps: true,
