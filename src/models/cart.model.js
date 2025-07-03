@@ -4,7 +4,7 @@ const cartSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User', // Reference to the user who owns this cart
+      ref: 'user', // Reference to the user who owns this cart
       required: true
     },
     serviceId: {
