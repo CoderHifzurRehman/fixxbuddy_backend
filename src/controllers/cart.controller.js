@@ -264,6 +264,26 @@ const clearCart = async (req, res) => {
   }
 };
 
+const getAllUsersDetails = async (req, res) => {
+  try{
+
+    const data = await Cart.find({}, 'userId status createdAt').populate('userId','firstName lastName email');
+
+  res.status(200).json({
+      success: true,
+      data: data
+    });
+  } catch (error) {
+    console.error('Error removing from cart:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while removing from cart'
+    });
+  }
+
+}
+
+
 module.exports = {
   addToCart,
   getCartItems,
@@ -272,5 +292,6 @@ module.exports = {
   updateCartItem,
   updateCartItemStatus,
   removeFromCart,
-  clearCart
+  clearCart,
+  getAllUsersDetails
 };

@@ -30,4 +30,8 @@ router.delete('/remove/:cartItemId', authMiddleware, cartController.removeFromCa
 // Clear entire cart (authenticated users only)
 router.delete('/clear', authMiddleware, cartController.clearCart);
 
+//user list who try to activity in services like add to cart or order and others etc.
+
+router.get('/users', cartController.getAllUsersDetails);
+
 module.exports = router;
