@@ -265,23 +265,137 @@ const clearCart = async (req, res) => {
 };
 
 const getAllUsersDetails = async (req, res) => {
-  try{
-
-    const data = await Cart.find({}, 'userId status createdAt').populate('userId','firstName lastName email');
-
-  res.status(200).json({
+  try {
+    // First get all pending requests with user data
+    const pendingRequests = await Cart.find({ status: 'pending' })
+      .populate('userId', 'firstName lastName email phone address');
+    
+    // Group by user and count requests
+    const usersMap = new Map();
+    
+    pendingRequests.forEach(request => {
+      const userId = request.userId._id.toString();
+      if (!usersMap.has(userId)) {
+        usersMap.set(userId, {
+          user: request.userId,
+          count: 0
+        });
+      }
+      usersMap.get(userId).count++;
+    });
+    
+    // Convert map to array
+    const usersWithCounts = Array.from(usersMap.values());
+    
+    res.status(200).json({
       success: true,
-      data: data
+      data: usersWithCounts
     });
   } catch (error) {
-    console.error('Error removing from cart:', error);
+    console.error('Error fetching users with requests:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error while removing from cart'
+      message: 'Server error while fetching users with requests'
     });
   }
+};
 
-}
+const getUserRequests = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    
+    const requests = await Cart.find({ 
+      userId: userId,
+    }).populate('serviceId', 'serviceName serviceCost description');
+    
+    res.status(200).json({
+      success: true,
+      data: requests
+    });
+  } catch (error) {
+    console.error('Error fetching user requests:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching user requests'
+    });
+  }
+};
+
+// @desc    Get single order details with tracking info
+// @route   GET /api/cart/:orderId
+// @access  Private
+const getOrderDetails = async (req, res) => {
+  try {
+    const order = await Cart.findById(req.params.orderId)
+      .populate('userId', 'firstName lastName email phone address')
+      .populate('assignedPartner', 'fullName phone email specialization');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Check if the requesting user owns this order or is admin
+    if (order.userId._id.toString() !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this order'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: order
+    });
+  } catch (error) {
+    console.error('Error fetching order details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching order details'
+    });
+  }
+};
+
+// @desc    Update cart item status (Admin version)
+// @route   PUT /api/cart/admin/update-status/:cartItemId
+// @access  Private/Admin
+const adminUpdateCartItemStatus = async (req, res) => {
+  try {
+    const { status, assignedPartner, scheduledDate, tracking } = req.body;
+    
+    const updateData = { status };
+    
+    if (assignedPartner) updateData.assignedPartner = assignedPartner;
+    if (scheduledDate) updateData.scheduledDate = scheduledDate;
+    if (tracking) updateData.$push = { tracking: { $each: tracking } };
+
+    const updatedItem = await Cart.findByIdAndUpdate(
+      req.params.cartItemId,
+      updateData,
+      { new: true }
+    );
+
+    if (!updatedItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cart item not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: updatedItem
+    });
+  } catch (error) {
+    console.error('Error updating cart item status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating cart item status'
+    });
+  }
+};
 
 
 module.exports = {
@@ -293,5 +407,8 @@ module.exports = {
   updateCartItemStatus,
   removeFromCart,
   clearCart,
-  getAllUsersDetails
+  getAllUsersDetails,
+  getUserRequests,
+  getOrderDetails, // Add this new export
+  adminUpdateCartItemStatus
 };

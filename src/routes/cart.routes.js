@@ -17,6 +17,8 @@ router.get('/list-all', authMiddleware, cartController.getAllOrders);
 // Get user's all order items (authenticated users only)
 router.get('/orders/:status', authMiddleware, cartController.getOrdersByStatus);
 
+router.get('/order-details/:orderId', authMiddleware, cartController.getOrderDetails);
+
 // Update cart item quantity (authenticated users only)
 router.put('/update/:cartItemId', authMiddleware, cartController.updateCartItem);
 
@@ -32,6 +34,10 @@ router.delete('/clear', authMiddleware, cartController.clearCart);
 
 //user list who try to activity in services like add to cart or order and others etc.
 
+router.put('/admin/update-status/:cartItemId', cartController.adminUpdateCartItemStatus);
+
+
 router.get('/users', cartController.getAllUsersDetails);
+router.get('/user-requests/:userId', cartController.getUserRequests);
 
 module.exports = router;

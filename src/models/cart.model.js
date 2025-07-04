@@ -40,7 +40,7 @@ const cartSchema = new mongoose.Schema(
       type: Number,
       default: 1
     },
-    assignedPartner: { type: mongoose.Schema.Types.ObjectId, ref: 'Partner' },
+    assignedPartner: { type: mongoose.Schema.Types.ObjectId, ref: 'partner' },
     scheduledDate: Date,
     tracking: [{
         message: String,
