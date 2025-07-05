@@ -175,19 +175,44 @@ const updateCartItem = async (req, res) => {
   }
 };
 
-// @desc    Update cart item status
+// @desc    Update cart item status with address/contact info
 // @route   PUT /api/cart/update-status/:cartItemId
 // @access  Private
 const updateCartItemStatus = async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, deliveryAddress, contactNumber } = req.body;
     
+    // Validate status input
+    const validStatuses = ['addToCart', 'pending', 'inProgress', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status value'
+      });
+    }
+
+    // When changing to pending status, require address and phone
+    if (status === 'pending' && (!deliveryAddress || !contactNumber)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Delivery address and contact number are required for pending status'
+      });
+    }
+
+    const updateData = { status };
+    
+    // Only update address/contact when changing to pending status
+    if (status === 'pending') {
+      updateData.deliveryAddress = deliveryAddress;
+      updateData.contactNumber = contactNumber;
+    }
+
     const updatedItem = await Cart.findOneAndUpdate(
       { 
         _id: req.params.cartItemId, 
         userId: req.user.id 
       },
-      { status },
+      updateData,
       { new: true }
     );
 
@@ -267,8 +292,8 @@ const clearCart = async (req, res) => {
 const getAllUsersDetails = async (req, res) => {
   try {
     // First get all pending requests with user data
-    const pendingRequests = await Cart.find({ status: 'pending' })
-      .populate('userId', 'firstName lastName email phone address');
+    const pendingRequests = await Cart.find({ status: 'pending' })  
+      .populate('userId', 'firstName lastName email');
     
     // Group by user and count requests
     const usersMap = new Map();
@@ -306,7 +331,7 @@ const getUserRequests = async (req, res) => {
     
     const requests = await Cart.find({ 
       userId: userId,
-    }).populate('serviceId', 'serviceName serviceCost description');
+    }).populate('serviceId', 'serviceName serviceCost description deliveryAddress contactNumber');
     
     res.status(200).json({
       success: true,

@@ -46,7 +46,25 @@ const cartSchema = new mongoose.Schema(
         message: String,
         date: { type: Date, default: Date.now },
         status: String
-    }]
+    }],
+    
+    // New fields for address and contact
+    deliveryAddress: {
+      _id: mongoose.Schema.Types.ObjectId,
+      label: String,
+      street: String,
+      city: String,
+      state: String,
+      postalCode: String,
+      country: String,
+      isPrimary: Boolean
+    },
+    contactNumber: {
+      _id: mongoose.Schema.Types.ObjectId,
+      label: String,
+      number: String,
+      isPrimary: Boolean
+    }
   },
   {
     timestamps: true,
