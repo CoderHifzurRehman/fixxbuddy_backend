@@ -1,8 +1,19 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+// Add this inside the Partner model file
+const CounterSchema = new mongoose.Schema({
+  _id: { type: String, required: true }, // 'partnerId'
+  seq: { type: Number, default: 0 },
+});
+const Counter = mongoose.model('Counter', CounterSchema);
+
 const partnerSchema = new mongoose.Schema(
   {
+    partnerId: { 
+      type: String, 
+      unique: true 
+    }, // e.g., "FB_0001"
     fullName: {
       type: String,
       required: true,
@@ -106,6 +117,22 @@ partnerSchema.pre("save", async function (next) {
   next();
 });
 
+// Pre-save hook for Partner
+partnerSchema.pre('save', async function(next) {
+  if (!this.isNew) return next();
+
+  try {
+    const counter = await Counter.findByIdAndUpdate(
+      { _id: 'partnerId' },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+    this.partnerId = `FB_partner_${String(counter.seq).padStart(4, '0')}`;
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 
 
