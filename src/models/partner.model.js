@@ -14,11 +14,16 @@ const partnerSchema = new mongoose.Schema(
       type: String, 
       unique: true 
     }, // e.g., "FB_0001"
-    fullName: {
+    firstName: {
       type: String,
-      required: true,
-      trim: true,
-      lowercase: true,
+      required: true 
+    },
+    lastName: {
+      type: String,
+      default: 'Male',
+    },
+    fullName: {
+      type: String
     },
     email: {
       type: String,
@@ -44,7 +49,13 @@ const partnerSchema = new mongoose.Schema(
       type: String
     },
     address: {
-      type: String
+      street: String,
+      city: String,
+      district: String,
+      state: String,
+      pincode: String,
+      country: { type: String, default: "India" },
+      fullAddress: String // Can be generated from components
     },
     pinCode: {
       type: Number,
@@ -89,7 +100,15 @@ const partnerSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    aadharPic: {
+    aadharFrontPic: {
+      type: String,
+      default: "",
+    },
+    aadharBackPic: {
+      type: String,
+      default: "",
+    },
+    PanPic: {
       type: String,
       default: "",
     },
@@ -107,6 +126,11 @@ const partnerSchema = new mongoose.Schema(
   }
 );
 
+
+partnerSchema.pre('save', function(next) {
+  this.fullName = `${this.firstName} ${this.lastName}`.trim();
+  next();
+});
 
 
 

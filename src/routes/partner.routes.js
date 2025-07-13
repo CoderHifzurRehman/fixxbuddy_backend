@@ -18,7 +18,9 @@ router.patch("/profile/update/:id", partnerController.updateProfile);
 
 router.post('/upload/images/:id', upload.fields([
     { name: 'profilePic', maxCount: 1 },
-    { name: 'aadharPic', maxCount: 1 },
+    { name: 'aadharFrontPic', maxCount: 1 },
+    { name: 'aadharBackPic', maxCount: 1 },
+    { name: 'PanPic', maxCount: 1 },
     { name: 'pcc', maxCount: 1 }
   ]), partnerController.uploadImages);
 

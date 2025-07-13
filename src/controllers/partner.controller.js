@@ -24,7 +24,8 @@ const validatePasswordStrength = (password) => {
 exports.partnerRegistration = async (req, res) => {
   try {
     const {
-      fullName,
+      firstName,
+      lastName,
       email,
       password,
       dob,
@@ -39,6 +40,24 @@ exports.partnerRegistration = async (req, res) => {
       hub,
       createdBy,
     } = req.body;
+
+     // Backward compatibility for fullName
+    let firstNameVal = firstName;
+    let lastNameVal = lastName;
+    
+    if (!firstName && req.body.fullName) {
+      const nameParts = req.body.fullName.split(' ');
+      firstNameVal = nameParts[0] || '';
+      lastNameVal = nameParts.slice(1).join(' ') || '';
+    }
+
+    // Validate required name fields
+    if (!firstNameVal) {
+      return res.status(400).send({
+        statusCode: 400,
+        message: "First name is required",
+      });
+    }
 
     // Check if password is strong enough
     if (!validatePasswordStrength(password)) {
@@ -58,15 +77,29 @@ exports.partnerRegistration = async (req, res) => {
       });
     }
 
+    // Create full address string from components
+    const fullAddress = [
+      address.street,
+      address.city,
+      address.district,
+      address.state,
+      pinCode
+    ].filter(Boolean).join(", ");
+
     // Proceed to create a new newPartner
     const newPartner = new Partner({
-      fullName,
+      firstName: firstNameVal,
+      lastName: lastNameVal,
       email,
       password,
       dob,
       aadharCardNumber,
       contactNumber,
-      address,
+      address: {
+        ...address,
+        pincode: pinCode,
+        fullAddress
+      },
       pinCode,
       gender,
       bloodGroup,
@@ -82,7 +115,7 @@ exports.partnerRegistration = async (req, res) => {
     res.status(201).send({
       statusCode: 201,
       message: "Partner registered successfully.",
-      data: { email,partnerId: newPartner._id },
+      data: { email,partnerId: newPartner._id, address: newPartner.address },
     });
   } catch (err) {
     const errorMsg = err.message || "Unknown error";
@@ -130,7 +163,7 @@ exports.partnerLogin = async (req, res) => {
 exports.uploadImages = async (req, res) => {
   try {
     // console.log(req.files);
-    const { profilePic, aadharPic, pcc } = req.files || {};
+    const { profilePic, aadharFrontPic, aadharBackPic, PanPic, pcc } = req.files || {};
     const partnerId = req.params.id;
     const folderName = `partner/images/${partnerId}`;
     const updateFields = {};
@@ -141,11 +174,21 @@ exports.uploadImages = async (req, res) => {
       updateFields.profilePic = profilePicUrl;
     }
   
-    if (aadharPic && aadharPic[0]) {
-      const [aadharPicUrl] = await uploadMultipleImagesToS3([aadharPic[0]], folderName);
-      updateFields.aadharPic = aadharPicUrl;
+    if (aadharFrontPic && aadharFrontPic[0]) {
+      const [aadharFrontPicUrl] = await uploadMultipleImagesToS3([aadharFrontPic[0]], folderName);
+      updateFields.aadharFrontPic = aadharFrontPicUrl;
     }
-  
+    
+    if (aadharBackPic && aadharBackPic[0]) {
+      const [aadharBackPicUrl] = await uploadMultipleImagesToS3([aadharBackPic[0]], folderName);
+      updateFields.aadharBackPic = aadharBackPicUrl;
+    }
+
+    if (PanPic && PanPic[0]) {
+      const [PanPicUrl] = await uploadMultipleImagesToS3([PanPic[0]], folderName);
+      updateFields.PanPic = PanPicUrl;
+    }
+
     if (pcc && pcc[0]) {
       const [pccUrl] = await uploadMultipleImagesToS3([pcc[0]], folderName);
       updateFields.pcc = pccUrl;
@@ -186,7 +229,8 @@ exports.uploadImages = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const {
-      fullName,
+      firstName,
+      lastName,
       email,
       password,
       dob,
@@ -200,6 +244,25 @@ exports.updateProfile = async (req, res) => {
       expertise,
       hub,
     } = req.body;
+    
+    // First get the current partner data
+    const existingPartner = await Partner.findById(req.params.id);
+    if (!existingPartner) {
+      return res.status(404).send({
+        statusCode: 404,
+        message: "Partner not found",
+      });
+    }
+    
+    // Backward compatibility
+    let firstNameVal = firstName !== undefined ? firstName.trim() : existingPartner.firstName;
+    let lastNameVal = lastName !== undefined ? lastName.trim() : existingPartner.lastName;
+    
+    if (!firstName && req.body.fullName) {
+      const nameParts = req.body.fullName.split(' ');
+      firstNameVal = nameParts[0] || '';
+      lastNameVal = nameParts.slice(1).join(' ') || '';
+    }
 
     const partnerId = req.params.id;
 
@@ -213,7 +276,11 @@ exports.updateProfile = async (req, res) => {
 
     // Prepare updated fields
     const updatedFields = {
-      fullName,
+      firstName: firstNameVal,
+      lastName: lastNameVal,
+      fullName: lastNameVal.trim() 
+        ? `${firstNameVal.trim()} ${lastNameVal.trim()}`
+        : firstNameVal.trim(),
       email,
       dob,
       aadharCardNumber,
@@ -226,6 +293,24 @@ exports.updateProfile = async (req, res) => {
       expertise,
       hub,
     };
+
+    // Handle address update if provided
+    if (address) {
+      const fullAddress = [
+        address.street,
+        address.city,
+        address.district,
+        address.state,
+        pinCode
+      ].filter(Boolean).join(", ");
+
+      updatedFields.address = {
+        ...address,
+        pincode: pinCode,
+        fullAddress
+      };
+    }
+
 
     // If password is provided, hash it
     if (password) {
@@ -277,11 +362,13 @@ exports.getSinglePartner = async (req, res) => {
       });
     }
 
+    const partnerData = partner.toObject();
+    partnerData.fullName = partner.fullName; // Add virtual field
 
     res.status(200).send({
       statusCode: 200,
       message: "Get partner successfully",
-      data: partner
+      data: partnerData
     });
   } catch (err) {
     const errorMsg = err.message || "Unknown error";
