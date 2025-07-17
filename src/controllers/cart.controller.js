@@ -289,32 +289,72 @@ const clearCart = async (req, res) => {
   }
 };
 
+// @desc    Get all users with their request counts (filtered by status)
+// @route   GET /api/cart/users
+// @access  Private/Admin
 const getAllUsersDetails = async (req, res) => {
   try {
-    // First get all pending requests with user data
-    const pendingRequests = await Cart.find({ status: 'pending' })  
-      .populate('userId', 'firstName lastName email');
-    
+    const { page = 1, limit = 10, status, search } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Base query for requests
+    let requestQuery = {};
+    if (status && status !== 'all') {
+      requestQuery.status = status;
+    }
+
+    // First get all requests with user data that match the status filter
+    const requests = await Cart.find(requestQuery)
+      .populate('userId', 'firstName lastName email phone')
+      .lean();
+
     // Group by user and count requests
     const usersMap = new Map();
     
-    pendingRequests.forEach(request => {
+    requests.forEach(request => {
+      if (!request.userId) return; // Skip if no user associated
+      
       const userId = request.userId._id.toString();
       if (!usersMap.has(userId)) {
         usersMap.set(userId, {
           user: request.userId,
-          count: 0
+          count: 0,
+          statuses: new Set() // Track all statuses for this user's requests
         });
       }
-      usersMap.get(userId).count++;
+      const userData = usersMap.get(userId);
+      userData.count++;
+      userData.statuses.add(request.status);
     });
-    
-    // Convert map to array
-    const usersWithCounts = Array.from(usersMap.values());
-    
+
+    // Convert map to array and apply search filter if provided
+    let usersWithCounts = Array.from(usersMap.values());
+
+    // Apply search filter if provided
+    if (search) {
+      const searchLower = search.toLowerCase();
+      usersWithCounts = usersWithCounts.filter(userData => {
+        const user = userData.user;
+        return (
+          user.firstName.toLowerCase().includes(searchLower) ||
+          user.lastName.toLowerCase().includes(searchLower) ||
+          user.email.toLowerCase().includes(searchLower) ||
+          user._id.toString().toLowerCase().includes(searchLower) ||
+          user.phone?.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+
+    // Apply pagination
+    const totalCount = usersWithCounts.length;
+    const paginatedUsers = usersWithCounts.slice(skip, skip + parseInt(limit));
+
     res.status(200).json({
       success: true,
-      data: usersWithCounts
+      data: {
+        users: paginatedUsers,
+        totalCount
+      }
     });
   } catch (error) {
     console.error('Error fetching users with requests:', error);
@@ -325,13 +365,17 @@ const getAllUsersDetails = async (req, res) => {
   }
 };
 
+// @desc    Get all requests for a specific user
+// @route   GET /api/cart/user-requests/:userId
+// @access  Private/Admin
 const getUserRequests = async (req, res) => {
   try {
     const userId = req.params.userId;
     
     const requests = await Cart.find({ 
       userId: userId,
-    }).populate('serviceId', 'serviceName serviceCost description deliveryAddress contactNumber');
+    }).populate('serviceId', 'serviceName serviceCost description deliveryAddress contactNumber')
+      .populate('assignedPartner', 'fullName phone email expertise');
     
     res.status(200).json({
       success: true,
@@ -353,7 +397,8 @@ const getOrderDetails = async (req, res) => {
   try {
     const order = await Cart.findById(req.params.orderId)
       .populate('userId', 'firstName lastName email phone address')
-      .populate('assignedPartner', 'fullName phone email specialization');
+      .populate('assignedPartner', 'fullName phone email expertise')
+      .populate('serviceId', 'serviceName serviceCost description');
 
     if (!order) {
       return res.status(404).json({
@@ -394,13 +439,22 @@ const adminUpdateCartItemStatus = async (req, res) => {
     
     if (assignedPartner) updateData.assignedPartner = assignedPartner;
     if (scheduledDate) updateData.scheduledDate = scheduledDate;
-    if (tracking) updateData.$push = { tracking: { $each: tracking } };
+    if (tracking) {
+      updateData.$push = { 
+        tracking: { 
+          $each: Array.isArray(tracking) ? tracking : [tracking],
+          $sort: { date: -1 } // Sort tracking by date descending
+        } 
+      };
+    }
 
     const updatedItem = await Cart.findByIdAndUpdate(
       req.params.cartItemId,
       updateData,
       { new: true }
-    );
+    )
+    .populate('assignedPartner', 'fullName phone email expertise')
+    .populate('serviceId', 'serviceName serviceCost description');
 
     if (!updatedItem) {
       return res.status(404).json({
@@ -435,5 +489,5 @@ module.exports = {
   getAllUsersDetails,
   getUserRequests,
   getOrderDetails, // Add this new export
-  adminUpdateCartItemStatus
+  adminUpdateCartItemStatus,
 };
