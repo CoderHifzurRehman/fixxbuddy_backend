@@ -64,12 +64,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      lowercase: true,
     },
     lastName: {
       type: String,
       trim: true,
-      lowercase: true,
     },
     email: {
       type: String,

@@ -11,29 +11,24 @@ const serviceTypeSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      lowercase: true,
     },
     serviceName: {
       type: String,
       trim: true,
-      lowercase: true,
     },
     serviceDescription: {
         type: String,
         trim: true,
-        lowercase: true,
         default:''
     },
     serviceCost: {
         type: String,
         trim: true,
-        lowercase: true,
         default:''
     },
     serviceDetails: {
         type: String,
         trim: true,
-        lowercase: true,
         default:''
     },   
     serviceVideoLink: {
