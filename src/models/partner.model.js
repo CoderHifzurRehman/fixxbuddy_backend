@@ -57,11 +57,6 @@ const partnerSchema = new mongoose.Schema(
       country: { type: String, default: "India" },
       fullAddress: String // Can be generated from components
     },
-    pinCode: {
-      type: Number,
-      default : "",
-
-    },
     gender: {
       type: String,
       enum: ['Male', 'Female', 'Other'],
