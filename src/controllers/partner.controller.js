@@ -32,7 +32,6 @@ exports.partnerRegistration = async (req, res) => {
       aadharCardNumber,
       contactNumber,
       address,
-      pinCode,
       gender,
       bloodGroup,
       designation,
@@ -83,7 +82,7 @@ exports.partnerRegistration = async (req, res) => {
       address.city,
       address.district,
       address.state,
-      pinCode
+      address.pincode
     ].filter(Boolean).join(", ");
 
     // Proceed to create a new newPartner
@@ -97,10 +96,9 @@ exports.partnerRegistration = async (req, res) => {
       contactNumber,
       address: {
         ...address,
-        pincode: pinCode,
+        pincode: address.pincode,
         fullAddress
       },
-      pinCode,
       gender,
       bloodGroup,
       designation,
@@ -237,7 +235,6 @@ exports.updateProfile = async (req, res) => {
       aadharCardNumber,
       contactNumber,
       address,
-      pinCode,
       gender,
       bloodGroup,
       designation,
@@ -286,7 +283,6 @@ exports.updateProfile = async (req, res) => {
       aadharCardNumber,
       contactNumber,
       address,
-      pinCode,
       gender,
       bloodGroup,
       designation,
@@ -301,12 +297,11 @@ exports.updateProfile = async (req, res) => {
         address.city,
         address.district,
         address.state,
-        pinCode
+        address.pincode
       ].filter(Boolean).join(", ");
 
       updatedFields.address = {
         ...address,
-        pincode: pinCode,
         fullAddress
       };
     }
