@@ -305,7 +305,7 @@ const getAllUsersDetails = async (req, res) => {
 
     // First get all requests with user data that match the status filter
     const requests = await Cart.find(requestQuery)
-      .populate('userId', 'firstName lastName email phone')
+      .populate('userId', 'firstName lastName email contactNumbers')
       .lean();
 
     // Group by user and count requests
