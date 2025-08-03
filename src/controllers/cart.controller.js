@@ -1,4 +1,7 @@
 const Cart = require('../models/cart.model');
+const MainservicesCategories = require('../models/mainServicesCategories.model')
+const Application = require('../models/applicationType.model');
+const mongoose = require('mongoose');
 
 // @desc    Add item to cart
 // @route   POST /api/cart/add
@@ -63,17 +66,58 @@ const getCartItems = async (req, res) => {
     const cartItems = await Cart.find({
         userId: req.user.id,
         status: 'addToCart' // Only return items with this status
-    });
+    }).lean();
+
+    // Fetch additional details in parallel
+    const enhancedItems = await Promise.all(cartItems.map(async (item) => {
+      try {
+        // Initialize with default values
+        let mainServiceName = 'Not specified';
+        let applicationName = 'Not specified';
+
+        // Only try to fetch main service name if we have a valid ID
+        if (item.mainServiceId && mongoose.isValidObjectId(item.mainServiceId)) {
+          const mainService = await MainservicesCategories.findById(item.mainServiceId)
+            .select('serviceName')
+            .lean();
+          mainServiceName = mainService?.serviceName || mainServiceName;
+        }
+
+        // Only try to fetch application name if we have a valid ID
+        if (item.applicationId && mongoose.isValidObjectId(item.applicationId)) {
+          console.log(item);
+          
+          const application = await Application.findById(item.applicationId)
+            .select('serviceName')
+            .lean();
+          applicationName = application?.serviceName || applicationName;
+        }
+
+        return {
+          ...item,
+          mainServiceName,
+          applicationName
+        };
+      } catch (err) {
+        console.error(`Error enhancing cart item ${item._id}:`, err);
+        return {
+          ...item,
+          mainServiceName: 'Error loading',
+          applicationName: 'Error loading'
+        };
+      }
+    }));
     res.status(200).json({
       success: true,
-      count: cartItems.length,
-      data: cartItems
+      count: enhancedItems.length,
+      data: enhancedItems
     });
   } catch (error) {
     console.error('Error fetching cart items:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error while fetching cart items'
+      message: 'Server error while fetching cart items',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -83,11 +127,51 @@ const getCartItems = async (req, res) => {
 // @access  Private
 const getAllOrders = async (req, res) => {
   try {
-    const orders = await Cart.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    const orders = await Cart.find({ userId: req.user.id }).sort({ createdAt: -1 }).lean();
+    
+    // Fetch additional details in parallel
+    const enhancedItems = await Promise.all(orders.map(async (item) => {
+      try {
+        // Initialize with default values
+        let mainServiceName = 'Not specified';
+        let applicationName = 'Not specified';
+
+        // Only try to fetch main service name if we have a valid ID
+        if (item.mainServiceId && mongoose.isValidObjectId(item.mainServiceId)) {
+          const mainService = await MainservicesCategories.findById(item.mainServiceId)
+            .select('serviceName')
+            .lean();
+          mainServiceName = mainService?.serviceName || mainServiceName;
+        }
+
+        // Only try to fetch application name if we have a valid ID
+        if (item.applicationId && mongoose.isValidObjectId(item.applicationId)) {
+          console.log(item);
+          
+          const application = await Application.findById(item.applicationId)
+            .select('serviceName')
+            .lean();
+          applicationName = application?.serviceName || applicationName;
+        }
+
+        return {
+          ...item,
+          mainServiceName,
+          applicationName
+        };
+      } catch (err) {
+        console.error(`Error enhancing cart item ${item._id}:`, err);
+        return {
+          ...item,
+          mainServiceName: 'Error loading',
+          applicationName: 'Error loading'
+        };
+      }
+    }));
     res.status(200).json({
       success: true,
-      count: orders.length,
-      data: orders
+      count: enhancedItems.length,
+      data: enhancedItems
     });
   } catch (error) {
     console.error('Error fetching all orders:', error);
