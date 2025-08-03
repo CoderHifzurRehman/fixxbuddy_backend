@@ -85,8 +85,6 @@ const getCartItems = async (req, res) => {
 
         // Only try to fetch application name if we have a valid ID
         if (item.applicationId && mongoose.isValidObjectId(item.applicationId)) {
-          console.log(item);
-          
           const application = await Application.findById(item.applicationId)
             .select('serviceName')
             .lean();
@@ -146,8 +144,6 @@ const getAllOrders = async (req, res) => {
 
         // Only try to fetch application name if we have a valid ID
         if (item.applicationId && mongoose.isValidObjectId(item.applicationId)) {
-          console.log(item);
-          
           const application = await Application.findById(item.applicationId)
             .select('serviceName')
             .lean();
