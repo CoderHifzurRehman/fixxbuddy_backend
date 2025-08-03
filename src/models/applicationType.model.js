@@ -35,6 +35,18 @@ const applicationTypeSchema = new mongoose.Schema(
   }
 );
 
+// Add to your existing model
+applicationTypeSchema.statics.findByCategory = function(categoryId) {
+  return this.find({ mainServiceCategoriesId: categoryId, isActive: true });
+};
+
+applicationTypeSchema.virtual('serviceTypes', {
+  ref: 'serviceType',
+  localField: '_id',
+  foreignField: 'applicationTypeId',
+  justOne: false
+});
+
 const ApplicationType = mongoose.model('applicationType', applicationTypeSchema);
 
 module.exports = ApplicationType;

@@ -1,4 +1,7 @@
 const ServiceType = require("../models/serviceType.model");
+const ApplicationType = require("../models/applicationType.model");
+const MainServicesCategories = require("../models/mainServicesCategories.model");
+const Mainservices = require("../models/mainServices.model");
 
 const {
   uploadSingleImageToS3,
@@ -274,5 +277,141 @@ exports.MainServicesPagination = async (page, limit, sorted, query) => {
     return { data, pagination };
   } catch (error) {
     throw new Error(error.message);
+  }
+};
+// NEW: Get service types by main service name with full hierarchy
+exports.getServiceTypesByMainServiceWithHierarchy = async (req, res) => {
+  try {
+    const mainServiceName = req.params.mainServiceName;
+
+    // 1. Find the main service by name
+    const mainService = await Mainservices.findOne({ 
+      serviceName: mainServiceName,
+      isActive: true 
+    });
+    
+    if (!mainService) {
+      return res.status(404).send({
+        statusCode: 404,
+        message: "Main service not found.",
+      });
+    }
+
+    // 2. Find all active categories for this main service
+    const categories = await MainServicesCategories.find({ 
+      mainServiceId: mainService._id,
+      isActive: true 
+    });
+
+    // 3. Find all active application types for these categories
+    const categoryIds = categories.map(c => c._id);
+    const applicationTypes = await ApplicationType.find({ 
+      mainServiceCategoriesId: { $in: categoryIds },
+      isActive: true 
+    });
+
+    // 4. Find all active service types for these application types
+    const applicationTypeIds = applicationTypes.map(a => a._id);
+    const serviceTypes = await ServiceType.find({ 
+      applicationTypeId: { $in: applicationTypeIds },
+      isActive: true 
+    });
+
+    // Build the response with hierarchy
+    const response = serviceTypes.map(serviceType => {
+      const applicationType = applicationTypes.find(a => 
+        a._id.equals(serviceType.applicationTypeId)
+      );
+      const category = categories.find(c => 
+        c._id.equals(applicationType.mainServiceCategoriesId)
+      );
+      
+      return {
+        serviceType,
+        hierarchy: {
+          mainService: {
+            id: mainService._id,
+            name: mainService.serviceName,
+            heading: mainService.serviceHeading
+          },
+          category: {
+            id: category._id,
+            name: category.serviceName,
+            heading: category.serviceHeading
+          },
+          applicationType: {
+            id: applicationType._id,
+            name: applicationType.serviceName,
+            heading: applicationType.serviceHeading
+          }
+        }
+      };
+    });
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "Service types retrieved with hierarchy successfully.",
+      data: response
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+// NEW: Get full hierarchy tree (for admin panel or other uses)
+exports.getFullServiceHierarchy = async (req, res) => {
+  try {
+    const mainServices = await Mainservices.find({ isActive: true });
+    
+    const hierarchy = await Promise.all(
+      mainServices.map(async (mainService) => {
+        const categories = await MainServicesCategories.find({
+          mainServiceId: mainService._id,
+          isActive: true
+        });
+        
+        const categoriesWithTypes = await Promise.all(
+          categories.map(async (category) => {
+            const applicationTypes = await ApplicationType.find({
+              mainServiceCategoriesId: category._id,
+              isActive: true
+            });
+            
+            const applicationTypesWithServices = await Promise.all(
+              applicationTypes.map(async (appType) => {
+                const serviceTypes = await ServiceType.find({
+                  applicationTypeId: appType._id,
+                  isActive: true
+                });
+                return {
+                  ...appType.toObject(),
+                  serviceTypes
+                };
+              })
+            );
+            
+            return {
+              ...category.toObject(),
+              applicationTypes: applicationTypesWithServices
+            };
+          })
+        );
+        
+        return {
+          ...mainService.toObject(),
+          categories: categoriesWithTypes
+        };
+      })
+    );
+    
+    res.status(200).send({
+      statusCode: 200,
+      message: "Full service hierarchy retrieved successfully.",
+      data: hierarchy
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
   }
 };

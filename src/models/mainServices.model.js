@@ -31,6 +31,22 @@ const mainServicesSchema = new mongoose.Schema(
   }
 );
 
+// Add to your existing model
+mainServicesSchema.statics.findActive = function() {
+  return this.find({ isActive: true });
+};
+
+mainServicesSchema.statics.findByName = function(name) {
+  return this.findOne({ serviceName: name, isActive: true });
+};
+
+mainServicesSchema.virtual('categories', {
+  ref: 'mainservicecategories',
+  localField: '_id',
+  foreignField: 'mainServiceId',
+  justOne: false
+});
+
 const Mainservices = mongoose.model('mainservice', mainServicesSchema);
 
 module.exports = Mainservices;

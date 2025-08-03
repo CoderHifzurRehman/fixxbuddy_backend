@@ -39,6 +39,18 @@ const mainServicesCategoriesSchema = new mongoose.Schema(
   }
 );
 
+// Add to your existing model
+mainServicesCategoriesSchema.statics.findByMainService = function(mainServiceId) {
+  return this.find({ mainServiceId, isActive: true });
+};
+
+mainServicesCategoriesSchema.virtual('applicationTypes', {
+  ref: 'applicationType',
+  localField: '_id',
+  foreignField: 'mainServiceCategoriesId',
+  justOne: false
+});
+
 const MainservicesCategories = mongoose.model('mainservicecategories', mainServicesCategoriesSchema);
 
 module.exports = MainservicesCategories;

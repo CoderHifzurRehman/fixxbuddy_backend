@@ -32,6 +32,11 @@ router.get('/name/:name', serviceTypeController.getSingleServiceTypeByName);
 router.delete('/:id', serviceTypeController.deleteServiceType)
 
 
+// NEW: Get service types by main service name with full hierarchy
+router.get( '/hierarchy/:mainServiceName', serviceTypeController.getServiceTypesByMainServiceWithHierarchy);
+
+// NEW: Get full service hierarchy (for admin panel)
+router.get( '/hierarchy/full/tree', authMiddleware, authorizeRoles('admin'), serviceTypeController.getFullServiceHierarchy);
 
 
 
