@@ -9,8 +9,9 @@ const {
 } = require("../utils/uploadImages");
 
 exports.createServiceType = async (req, res) => {
+  console.log('Received files:', req.files);
   try {
-    const {applicationTypeId, serviceHeading, serviceName, serviceDescription, serviceCost, serviceDetails, serviceVideoLink } = req.body;
+    const {applicationTypeId, serviceHeading, serviceName, serviceDescription, serviceCost, serviceDetails, serviceVideoLink,  discountPercentage, discountValidUntil, discountTerms } = req.body;
 
     // Check if a service with the same name already exists
     const existingServiceType = await ServiceType.findOne({ serviceName });
@@ -23,33 +24,45 @@ exports.createServiceType = async (req, res) => {
 
     const files = req.files;
     if (!files || files.length === 0) {
-      return res.status(400).send({ message: "No images uploaded." });
+      return res.status(400).send({ message: "No files uploaded." });
     }
     const folderName = `services/serviceType/${serviceName}`; // Customize the folder name if needed
     // console.log(folderName);
 
-    const serviceImage = await uploadMultipleImagesToS3(files, folderName);
-    // console.log(imageUrl);
+    // Handle service images
+    let serviceImages = [];
+    if (files.serviceImages && files.serviceImages.length > 0) {
+      serviceImages = await uploadMultipleImagesToS3(files.serviceImages, folderName);
+    }
 
+    // Handle rate card PDF
+    let rateCardPdfUrl = '';
+    if (files.rateCardPdf && files.rateCardPdf[0]) {
+      rateCardPdfUrl = await uploadSingleImageToS3(files.rateCardPdf[0], `${folderName}/rateCard`);
+    }
     // Proceed to create a new user
     const newserviceType = new ServiceType({
       applicationTypeId,
       serviceHeading,
       serviceName,
       serviceDescription,
-      serviceImage,
+      serviceImage: serviceImages,
       serviceCost,
       serviceDetails,
-      serviceVideoLink
+      serviceVideoLink,
+      discountPercentage: discountPercentage || 0,
+      discountValidUntil: discountValidUntil || null,
+      discountTerms: discountTerms || '',
+      rateCardPdf: rateCardPdfUrl
     });
 
     // Save the new user to the database
-    const savedMainservices = await newserviceType.save();
+    const savedServiceType = await newserviceType.save();
 
     res.status(201).send({
       statusCode: 201,
-      message: "Create Application Type successfully.",
-      data: savedMainservices,
+      message: "Create Service Type successfully.",
+      data: savedServiceType,
     });
   } catch (err) {
     const errorMsg = err.message || "Unknown error";
@@ -60,7 +73,7 @@ exports.createServiceType = async (req, res) => {
 // Update an existing main service
 exports.updateServiceType = async (req, res) => {
   try {
-    const { applicationTypeId, serviceName, serviceHeading, serviceDescription, serviceCost, serviceDetails, serviceVideoLink } = req.body;
+    const { applicationTypeId, serviceName, serviceHeading, serviceDescription, serviceCost, serviceDetails, serviceVideoLink, discountPercentage, discountValidUntil, discountTerms } = req.body;
     const serviceId = req.params.id; // Assuming you're using the service's ID for updates
 
     // Find the service by ID
@@ -68,18 +81,25 @@ exports.updateServiceType = async (req, res) => {
     if (!service) {
       return res.status(404).send({
         statusCode: 404,
-        message: "Application Type not found.",
+        message: "Service Type not found.",
       });
     }
 
-    // Optionally update the image if a new one is uploaded
-    const files = req.files;
-    if (!files || files.length === 0) {
-      return res.status(400).send({ message: "No images uploaded." });
+    // Handle image uploads
+    const files = req.files || {};
+    let serviceImages = service.serviceImage;
+    let rateCardPdf = service.rateCardPdf;
+
+    if (files.serviceImages) {
+      const folderName = `services/serviceType/${serviceName || service.serviceName}`;
+      serviceImages = await uploadMultipleImagesToS3(files.serviceImages, folderName);
     }
 
-    const folderName = `services/serviceType/${serviceName}`;
-    const serviceImages = await uploadMultipleImagesToS3(files, folderName); // returns array of URLs
+    if (files.rateCardPdf) {
+      const folderName = `services/serviceType/${serviceName || service.serviceName}`;
+      rateCardPdf = await uploadSingleImageToS3(files.rateCardPdf[0], `${folderName}/rateCard`);
+    }
+
     // Update the service data
     service.applicationTypeId = applicationTypeId || service.applicationTypeId;
     service.serviceHeading = serviceHeading || service.serviceHeading;
@@ -89,6 +109,10 @@ exports.updateServiceType = async (req, res) => {
     service.serviceDetails = serviceDetails || service.serviceDetails;
     service.serviceVideoLink = serviceVideoLink || service.serviceVideoLink;
     service.serviceImage = serviceImages;
+    service.discountPercentage = discountPercentage || service.discountPercentage;
+    service.discountValidUntil = discountValidUntil || service.discountValidUntil;
+    service.discountTerms = discountTerms || service.discountTerms;
+    service.rateCardPdf = rateCardPdf;
 
     // Save the updated service
     const updatedService = await service.save();

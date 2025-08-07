@@ -44,6 +44,26 @@ const serviceTypeSchema = new mongoose.Schema(
       type:[String],
       default:"",
     },
+    discountPercentage: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100
+    },
+    discountValidUntil: {
+      type: Date,
+      default: null
+    },
+    rateCardPdf: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    discountTerms: {
+      type: String,
+      trim: true,
+      default: ''
+    }
   },
   {
     timestamps: true,
