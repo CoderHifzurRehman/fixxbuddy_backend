@@ -15,6 +15,15 @@ const sanitizeFileName = (fileName) => {
   return fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
 };
 
+const sanitizeS3Key = (input) => {
+  if (!input) return '';
+  return input
+    .toString()
+    .replace(/[^a-zA-Z0-9!\-_.*'()]/g, '_') // AWS-safe characters
+    .replace(/\/{2,}/g, '/') // Replace multiple slashes with single
+    .replace(/^\/+|\/+$/g, ''); // Trim leading/trailing slashes
+};
+
 // Initialize the S3 client
 const s3 = new S3Client({
   region: region,
@@ -63,7 +72,7 @@ exports.uploadMultipleImagesToS3 = async (files, folderName) => {
     }
 
     const sanitizedFileName = sanitizeFileName(file.originalname);
-    const filePath = `${folderName}/${sanitizedFileName}`;
+    const filePath = `${sanitizeS3Key(folderName)}/${sanitizedFileName}`;
 
     try {
       const command = new PutObjectCommand({
