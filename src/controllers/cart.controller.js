@@ -3,12 +3,24 @@ const MainservicesCategories = require('../models/mainServicesCategories.model')
 const Application = require('../models/applicationType.model');
 const mongoose = require('mongoose');
 
+
+const generateOrderId = () => {
+  const prefix = "FBORD";
+  const timestamp = Date.now().toString(36).slice(-4).toUpperCase(); // Last 4 chars of timestamp
+  const randomChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let suffix = "";
+  
+  for (let i = 0; i < 4; i++) { // Shorter random part since timestamp helps
+    suffix += randomChars.charAt(Math.floor(Math.random() * randomChars.length));
+  }
+  
+  return `${prefix}${timestamp}${suffix}`; // e.g., FBORDK8J3X2
+};
+
 // @desc    Add item to cart
 // @route   POST /api/cart/add
 // @access  Private
-const addToCart = async (req, res) => {
-    console.log(req.body);
-    
+const addToCart = async (req, res) => {    
   try {
     // Works for both JSON and form-data
     const { 
