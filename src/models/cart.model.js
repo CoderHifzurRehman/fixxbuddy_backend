@@ -17,7 +17,6 @@ const cartSchema = new mongoose.Schema(
   {
     orderId: {
       type: String,
-      default: generateOrderId,
       unique: true,
     },
     userId: {

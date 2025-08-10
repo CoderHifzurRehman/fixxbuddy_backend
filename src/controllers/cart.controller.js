@@ -36,6 +36,7 @@ const addToCart = async (req, res) => {
 
     const cartItem = await Cart.create({
       userId: req.user.id,
+      orderId: generateOrderId(),
       serviceId,
       serviceName,
       serviceCost: Number(serviceCost), // Ensure number type
