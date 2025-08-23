@@ -182,6 +182,26 @@ exports.getServiceTypeList = async (req, res) => {
   }
 };
 
+// Add this to your serviceType.controller.js
+exports.getAllServiceTypes = async (req, res) => {
+  try {
+    const serviceTypes = await ServiceType.find({})
+      .populate('applianceTypeId')
+      .populate('mainServiceId');
+
+    res.status(200).json({
+      success: true,
+      data: serviceTypes
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching all service types',
+      error: error.message
+    });
+  }
+};
+
 
 // Get a single main service by service name
 exports.getSingleServiceTypeByName = async (req, res) => {

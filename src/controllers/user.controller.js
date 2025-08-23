@@ -32,7 +32,7 @@ exports.userRegistration = async (req, res) => {
     if (!file) {
       return res.status(400).send("No file uploaded.");
     }
-    const folderName = `partner/prfilePIC/${email}`; // Customize the folder name if needed
+    const folderName = `user/profilePic/${email}`; // Customize the folder name if needed
     // console.log(folderName);
 
     const imageUrl = await uploadSingleImageToS3(file, folderName);

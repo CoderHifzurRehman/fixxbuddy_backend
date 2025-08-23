@@ -19,7 +19,7 @@ const sanitizeS3Key = (input) => {
   if (!input) return '';
   return input
     .toString()
-    .replace(/[^a-zA-Z0-9!\-_.*'()]/g, '_') // AWS-safe characters
+    .replace(/[^a-zA-Z0-9!\-_.*'()\/]/g, '_') // Added \/ to allow forward slashes
     .replace(/\/{2,}/g, '/') // Replace multiple slashes with single
     .replace(/^\/+|\/+$/g, ''); // Trim leading/trailing slashes
 };
