@@ -302,7 +302,7 @@ exports.updateUserProfile = async (req, res) => {
 exports.addAddress = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { street, city, state, country, postalCode, isPrimary, label } = req.body;
+    const { street, city, state, country, postalCode, district, isPrimary, label } = req.body;
 
     const user = await User.findById(userId);
     if (!user) {
@@ -315,6 +315,7 @@ exports.addAddress = async (req, res) => {
       state,
       country,
       postalCode,
+      district,
       isPrimary: isPrimary || false,
       label: label || 'home'
     };

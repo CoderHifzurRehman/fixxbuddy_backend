@@ -27,6 +27,10 @@ const addressSchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
+  district: {
+    type: String,
+    trim: true,
+  },
   isPrimary: {
     type: Boolean,
     default: false,
