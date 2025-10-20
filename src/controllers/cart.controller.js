@@ -387,7 +387,14 @@ const clearCart = async (req, res) => {
 // @access  Private/Admin
 const getAllUsersDetails = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, search } = req.query;
+    const { 
+      page = 1, 
+      limit = 10, 
+      status, 
+      search,
+      sortBy = 'requestedDate', // New: added sorting
+      sortOrder = 'desc' // New: added sort order
+    } = req.query;
     const skip = (page - 1) * limit;
 
     // Base query for requests
@@ -399,9 +406,10 @@ const getAllUsersDetails = async (req, res) => {
     // First get all requests with user data that match the status filter
     const requests = await Cart.find(requestQuery)
       .populate('userId', 'firstName lastName email contactNumbers')
+      .sort({ createdAt: -1 }) // Sort requests by creation date
       .lean();
 
-    // Group by user and count requests
+    // Group by user and count requests with additional data for sorting
     const usersMap = new Map();
     
     requests.forEach(request => {
@@ -412,12 +420,30 @@ const getAllUsersDetails = async (req, res) => {
         usersMap.set(userId, {
           user: request.userId,
           count: 0,
-          statuses: new Set() // Track all statuses for this user's requests
+          statuses: new Set(),
+          latestRequestDate: request.createdAt, // Track latest request date
+          earliestRequestDate: request.createdAt, // Track earliest request date
+          requests: [] // Store individual requests for additional processing
         });
       }
+      
       const userData = usersMap.get(userId);
       userData.count++;
       userData.statuses.add(request.status);
+      userData.requests.push({
+        createdAt: request.createdAt,
+        status: request.status
+      });
+      
+      // Update latest request date
+      if (new Date(request.createdAt) > new Date(userData.latestRequestDate)) {
+        userData.latestRequestDate = request.createdAt;
+      }
+      
+      // Update earliest request date
+      if (new Date(request.createdAt) < new Date(userData.earliestRequestDate)) {
+        userData.earliestRequestDate = request.createdAt;
+      }
     });
 
     // Convert map to array and apply search filter if provided
@@ -429,24 +455,80 @@ const getAllUsersDetails = async (req, res) => {
       usersWithCounts = usersWithCounts.filter(userData => {
         const user = userData.user;
         return (
-          user.firstName.toLowerCase().includes(searchLower) ||
-          user.lastName.toLowerCase().includes(searchLower) ||
-          user.email.toLowerCase().includes(searchLower) ||
-          user._id.toString().toLowerCase().includes(searchLower) ||
-          user.phone?.toLowerCase().includes(searchLower)
+          user.firstName?.toLowerCase().includes(searchLower) ||
+          user.lastName?.toLowerCase().includes(searchLower) ||
+          user.email?.toLowerCase().includes(searchLower) ||
+          user._id?.toString().toLowerCase().includes(searchLower) ||
+          user.contactNumbers?.some(contact => 
+            contact.number?.toLowerCase().includes(searchLower)
+          )
         );
       });
     }
+
+    // Apply sorting
+    usersWithCounts.sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortBy) {
+        case 'requestedDate':
+          aValue = new Date(a.latestRequestDate);
+          bValue = new Date(b.latestRequestDate);
+          break;
+          
+        case 'requestCount':
+          aValue = a.count;
+          bValue = b.count;
+          break;
+          
+        case 'userName':
+          aValue = `${a.user.firstName || ''} ${a.user.lastName || ''}`.toLowerCase();
+          bValue = `${b.user.firstName || ''} ${b.user.lastName || ''}`.toLowerCase();
+          break;
+          
+        case 'earliestRequest':
+          aValue = new Date(a.earliestRequestDate);
+          bValue = new Date(b.earliestRequestDate);
+          break;
+          
+        default:
+          aValue = new Date(a.latestRequestDate);
+          bValue = new Date(b.latestRequestDate);
+      }
+
+      // Handle null/undefined values
+      if (aValue == null) aValue = sortBy === 'requestCount' ? 0 : new Date(0);
+      if (bValue == null) bValue = sortBy === 'requestCount' ? 0 : new Date(0);
+
+      if (sortOrder === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
 
     // Apply pagination
     const totalCount = usersWithCounts.length;
     const paginatedUsers = usersWithCounts.slice(skip, skip + parseInt(limit));
 
+    // Format response data
+    const formattedUsers = paginatedUsers.map(userData => ({
+      user: userData.user,
+      count: userData.count,
+      latestRequestDate: userData.latestRequestDate,
+      earliestRequestDate: userData.earliestRequestDate,
+      statuses: Array.from(userData.statuses)
+    }));
+
     res.status(200).json({
       success: true,
       data: {
-        users: paginatedUsers,
-        totalCount
+        users: formattedUsers,
+        totalCount,
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / limit),
+        sortBy,
+        sortOrder
       }
     });
   } catch (error) {
@@ -457,7 +539,6 @@ const getAllUsersDetails = async (req, res) => {
     });
   }
 };
-
 // @desc    Get all requests for a specific user
 // @route   GET /api/cart/user-requests/:userId
 // @access  Private/Admin
