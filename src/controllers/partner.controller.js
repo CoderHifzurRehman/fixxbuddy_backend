@@ -618,7 +618,7 @@ exports.startService = async (req, res) => {
       success: true,
       message: 'OTP sent to customer successfully',
       // Remove this in production - only for testing
-      otp: process.env.NODE_ENV === 'development' ? otp : undefined
+      // otp: process.env.NODE_ENV === 'development' ? otp : undefined
     });
   } catch (error) {
     console.error('Start service error:', error);
