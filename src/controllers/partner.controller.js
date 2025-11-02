@@ -610,15 +610,31 @@ exports.startService = async (req, res) => {
     console.log(`OTP for task ${taskId}: ${otp}`);
     console.log(`Send to user: ${task.userId.contactNumber}`);
 
-    // Also send email notification
-    const subject = "Service Starting OTP - Fixxbuddy";
-    await sendEmail(subject, task.userId.email, serviceStartOtpTemplate(task.userId, otp));
+    // Try to send email with timeout and error handling
+    try {
+      const subject = "Service Starting OTP - Fixxbuddy";
+      await Promise.race([
+        sendEmail(subject, task.userId.email, serviceStartOtpTemplate(task.userId, otp)),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Email timeout')), 10000) // 10 second timeout
+        )
+      ]);
+      console.log('OTP email sent successfully');
+    } catch (emailError) {
+      console.error('Failed to send OTP email:', emailError.message);
+      // Don't fail the entire request if email fails
+      // The OTP is still generated and stored, we'll return it in response for testing
+    }
+
+    // // Also send email notification
+    // const subject = "Service Starting OTP - Fixxbuddy";
+    // await sendEmail(subject, task.userId.email, serviceStartOtpTemplate(task.userId, otp));
 
     res.json({
       success: true,
       message: 'OTP sent to customer successfully',
       // Remove this in production - only for testing
-      // otp: process.env.NODE_ENV === 'development' ? otp : undefined
+      otp: process.env.NODE_ENV === 'development' ? otp : undefined
     });
   } catch (error) {
     console.error('Start service error:', error);
