@@ -580,119 +580,54 @@ exports.startService = async (req, res) => {
     const { taskId } = req.params;
     const partnerId = req.user.id;
 
-    console.log('Starting service for task:', taskId);
-    console.log('Partner ID:', partnerId);
-
-    // Find the task with better population
+    // Find the task assigned to this partner
     const task = await Cart.findOne({ 
       _id: taskId, 
       assignedPartner: partnerId,
       status: 'inProgress'
-    })
-    .populate('userId', 'firstName lastName email contactNumber')
-    .populate('assignedPartner', 'firstName lastName');
+    }).populate('userId', 'email firstName lastName');
 
     if (!task) {
-      console.log('Task not found or not assigned to partner');
       return res.status(404).json({
         success: false,
         message: 'Task not found or not in progress status'
       });
     }
 
-    console.log('Task found:', {
-      taskId: task._id,
-      serviceName: task.serviceName,
-      userId: task.userId,
-      userData: task.userId ? {
-        id: task.userId._id,
-        firstName: task.userId.firstName,
-        lastName: task.userId.lastName,
-        email: task.userId.email,
-        contactNumber: task.userId.contactNumber
-      } : 'No user data'
-    });
-
-    // Check if we have user data
-    if (!task.userId) {
-      return res.status(400).json({
-        success: false,
-        message: 'User data not found for this task'
-      });
-    }
-
-    // Generate OTP
+    // Generate OTP (6-digit random number)
     const otp = Math.floor(100000 + Math.random() * 900000);
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
+    // Update task with OTP details
     task.serviceOtp = otp;
     task.serviceOtpExpiry = otpExpiry;
     task.otpVerified = false;
     
     await task.save();
 
+    // TODO: Send OTP to user's phone via SMS service
+    // For now, we'll log it (in production, integrate with SMS service like Twilio)
     console.log(`OTP for task ${taskId}: ${otp}`);
-    console.log(`User email: ${task.userId.email}`);
-    console.log(`User contact: ${task.userId.contactNumber}`);
+    console.log(`Send to user: ${task?.contactNumber?.number}`);
 
-    let otpSent = false;
-    let sentVia = '';
+    // Also send email notification
+    const subject = "Service Starting OTP - Fixxbuddy";
+    await sendEmail(subject, task.userId.email, serviceStartOtpTemplate(task.userId, otp));
 
-    // Try to send email if user has email
-    if (task.userId.email) {
-      try {
-        const subject = "Service Starting OTP - Fixxbuddy";
-        await sendEmail(subject, task.userId.email, serviceStartOtpTemplate(task.userId, otp));
-        otpSent = true;
-        sentVia = 'email';
-        console.log('OTP email sent successfully to:', task.userId.email);
-      } catch (emailError) {
-        console.error('Email failed:', emailError.message);
-        // Continue to other methods
-      }
-    }
-
-    // If email failed or no email, check if we have contact number
-    if (!otpSent && task.userId.contactNumber) {
-      // Here you would implement SMS
-      console.log('Would send SMS to:', task.userId.contactNumber);
-      // For now, we'll just log it
-      sentVia = 'sms_available';
-      console.log('SMS would be sent to:', task.userId.contactNumber);
-    }
-
-    const response = {
+    res.json({
       success: true,
-      message: 'OTP generated successfully',
-      otp: otp, // Always return OTP for now
-      userEmail: task.userId.email,
-      userContact: task.userId.contactNumber,
-      otpSent: otpSent,
-      sentVia: sentVia || 'none'
-    };
-
-    // Add appropriate message
-    if (otpSent) {
-      response.message += `. OTP sent via ${sentVia}`;
-    } else if (task.userId.contactNumber) {
-      response.message += '. SMS service not configured. Use OTP below.';
-    } else if (task.userId.email) {
-      response.message += '. Email failed. Use OTP below.';
-    } else {
-      response.message += '. No contact method available. Use OTP below.';
-    }
-
-    res.json(response);
-
+      message: 'OTP sent to customer successfully',
+      // Remove this in production - only for testing
+      // otp: process.env.NODE_ENV === 'development' ? otp : undefined
+    });
   } catch (error) {
     console.error('Start service error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error starting service: ' + error.message
+      message: 'Error starting service'
     });
   }
 };
-
 
 exports.verifyServiceOtp = async (req, res) => {
   try {
