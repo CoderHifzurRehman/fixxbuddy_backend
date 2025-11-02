@@ -110,5 +110,94 @@ function otpMailTemplate(data) {
 </html>`;
 }
 
-// Export the function so it can be used in other files
-module.exports = { welcomeMailTemplate, otpMailTemplate };
+// Add to your mailing functions
+function serviceStartOtpTemplate(user, otp) {
+  return `
+  <html>
+  <head>
+      <style>
+          body {
+              font-family: 'Arial', sans-serif;
+              line-height: 1.6;
+              color: #333333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+          }
+          .header {
+              background-color: #2E5D9E;
+              padding: 20px;
+              text-align: center;
+              border-radius: 5px 5px 0 0;
+          }
+          .header img {
+              max-width: 180px;
+          }
+          .content {
+              padding: 25px;
+              background-color: #ffffff;
+              border-left: 1px solid #e0e0e0;
+              border-right: 1px solid #e0e0e0;
+          }
+          .otp-code {
+              font-size: 28px;
+              font-weight: bold;
+              color: #2E5D9E;
+              text-align: center;
+              margin: 25px 0;
+              letter-spacing: 3px;
+          }
+          .footer {
+              background-color: #f5f5f5;
+              padding: 20px;
+              text-align: center;
+              font-size: 12px;
+              color: #777777;
+              border-radius: 0 0 5px 5px;
+              border-left: 1px solid #e0e0e0;
+              border-right: 1px solid #e0e0e0;
+              border-bottom: 1px solid #e0e0e0;
+          }
+          .info-box {
+              background-color: #f8f9fa;
+              border-left: 4px solid #2E5D9E;
+              padding: 15px;
+              margin: 15px 0;
+          }
+      </style>
+  </head>
+  <body>
+      <div class="header">
+          <img src="https://fixxbuddy.s3.ap-south-1.amazonaws.com/Website/Images/logo.png" alt="Fixxbuddy Logo">
+      </div>
+      
+      <div class="content">
+          <h2>Service Starting Notification</h2>
+          <p>Dear ${user.firstName} ${user.lastName},</p>
+          
+          <div class="info-box">
+              <p><strong>Your service professional is arriving and has requested to start the service.</strong></p>
+              <p>Please provide the following OTP to the service professional to begin the work:</p>
+          </div>
+          
+          <div class="otp-code">${otp}</div>
+          
+          <p>This OTP is valid for <strong>10 minutes</strong> and must be shared only with the verified Fixxbuddy service professional.</p>
+          
+          <p><strong>Security Notice:</strong></p>
+          <ul>
+              <li>Do not share this OTP with anyone else</li>
+              <li>Verify the professional's identity card before sharing OTP</li>
+              <li>The OTP will expire after 10 minutes</li>
+          </ul>
+      </div>
+      
+      <div class="footer">
+          <p>© 2025 Fixxbuddy. All rights reserved.</p>
+          <p>Your trusted partner for premium services</p>
+      </div>
+  </body>
+  </html>`;
+}
+
+module.exports = { welcomeMailTemplate, otpMailTemplate, serviceStartOtpTemplate };

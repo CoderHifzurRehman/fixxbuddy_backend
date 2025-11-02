@@ -37,7 +37,7 @@ const cartSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['addToCart', 'pending', 'inProgress', 'completed', 'cancelled'],
+      enum: ['addToCart', 'pending', 'assigned', 'inProgress', 'completed', 'cancelled'],
       default: 'addToCart'
     },
     quantity: {
@@ -68,7 +68,31 @@ const cartSchema = new mongoose.Schema(
       label: String,
       number: String,
       isPrimary: Boolean
-    }
+    },
+    // OTP fields for service start verification
+  serviceOtp: {
+    type: Number,
+    required: false
+  },
+  serviceOtpExpiry: {
+    type: Date,
+    required: false
+  },
+  otpVerified: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Service completion fields
+  completedAt: {
+    type: Date
+  },
+  serviceNotes: {
+    type: String
+  },
+  customerFeedback: {
+    type: String
+  }
   },
   {
     timestamps: true,

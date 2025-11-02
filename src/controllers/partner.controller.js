@@ -2,8 +2,9 @@ const { sendEmail } = require("../config/email");
 const Partner = require("../models/partner.model");
 const { generateToken } = require("../utils/jwt");
 const bcrypt = require("bcryptjs");
-
+const Cart = require('../models/cart.model');
 const { uploadMultipleImagesToS3 } = require("../utils/uploadImages");
+const { serviceStartOtpTemplate } = require("../utils/mailingFunction");
 
 const validatePasswordStrength = (password) => {
   const minLength = 8;
@@ -466,5 +467,362 @@ exports.PartnerServicesPagination = async (page, limit, sorted, query) => {
     return { data, pagination };
   } catch (error) {
     throw new Error(error.message);
+  }
+};
+
+
+// Add these methods to your partner.controller.js
+
+exports.getPartnerDashboard = async (req, res) => {
+  try {
+    const partnerId = req.user.id;
+    
+    // Get all tasks assigned to this partner
+    const tasks = await Cart.find({ 
+      assignedPartner: partnerId 
+    }).populate('userId', 'name email firstName lastName')
+      .sort({ createdAt: -1 });
+    
+    // Calculate earnings from completed tasks
+    const completedTasks = tasks.filter(task => task.status === 'completed');
+    const earnings = completedTasks.reduce((total, task) => total + (task.serviceCost * task.quantity), 0);
+    
+    res.json({
+      success: true,
+      tasks,
+      earnings,
+      stats: {
+        total: tasks.length,
+        pending: tasks.filter(t => t.status === 'pending').length,
+        inProgress: tasks.filter(t => t.status === 'inProgress').length,
+        completed: completedTasks.length,
+        cancelled: tasks.filter(t => t.status === 'cancelled').length
+      }
+    });
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching dashboard data'
+    });
+  }
+};
+
+exports.updateTaskStatus = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { status, partnerAction } = req.body;
+    const partnerId = req.user.id;
+    
+    // Find the task assigned to this partner
+    const task = await Cart.findOne({ 
+      _id: taskId, 
+      assignedPartner: partnerId 
+    });
+    
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found or not assigned to you'
+      });
+    }
+    
+    // Validate status transition
+    const validTransitions = {
+      'pending': ['inProgress', 'assigned'],
+      'assigned': ['completed', 'cancelled', 'inProgress', 'pending'],
+    };
+    
+    if (!validTransitions[task.status]?.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status transition from ${task.status} to ${status}`
+      });
+    }
+    
+    // Update task status
+    task.status = status;
+    
+    // Add tracking entry
+    const actionMessages = {
+      'accept': 'Task accepted by partner',
+      'reject': 'Task rejected by partner',
+      'complete': 'Task completed by partner',
+      'cancel': 'Task cancelled by partner'
+    };
+    
+    task.tracking.push({
+      message: actionMessages[partnerAction] || `Status changed to ${status}`,
+      status: status,
+      date: new Date()
+    });
+    
+    await task.save();
+    
+    res.json({
+      success: true,
+      message: `Task ${partnerAction}ed successfully`,
+      task
+    });
+  } catch (error) {
+    console.error('Update task status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating task status'
+    });
+  }
+};
+
+// Add these new methods to partner.controller.js
+
+exports.startService = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const partnerId = req.user.id;
+
+    // Find the task assigned to this partner
+    const task = await Cart.findOne({ 
+      _id: taskId, 
+      assignedPartner: partnerId,
+      status: 'inProgress'
+    }).populate('userId', 'contactNumber email firstName lastName');
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found or not in progress status'
+      });
+    }
+
+    // Generate OTP (6-digit random number)
+    const otp = Math.floor(100000 + Math.random() * 900000);
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Update task with OTP details
+    task.serviceOtp = otp;
+    task.serviceOtpExpiry = otpExpiry;
+    task.otpVerified = false;
+    
+    await task.save();
+
+    // TODO: Send OTP to user's phone via SMS service
+    // For now, we'll log it (in production, integrate with SMS service like Twilio)
+    console.log(`OTP for task ${taskId}: ${otp}`);
+    console.log(`Send to user: ${task.userId.contactNumber}`);
+
+    // Also send email notification
+    const subject = "Service Starting OTP - Fixxbuddy";
+    await sendEmail(subject, task.userId.email, serviceStartOtpTemplate(task.userId, otp));
+
+    res.json({
+      success: true,
+      message: 'OTP sent to customer successfully',
+      // Remove this in production - only for testing
+      otp: process.env.NODE_ENV === 'development' ? otp : undefined
+    });
+  } catch (error) {
+    console.error('Start service error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error starting service'
+    });
+  }
+};
+
+exports.verifyServiceOtp = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { otp } = req.body;
+    const partnerId = req.user.id;
+
+    // Find the task
+    const task = await Cart.findOne({ 
+      _id: taskId, 
+      assignedPartner: partnerId,
+      status: 'inProgress'
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found'
+      });
+    }
+
+    // Check if OTP exists and is not expired
+    if (!task.serviceOtp || !task.serviceOtpExpiry) {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP not generated for this service'
+      });
+    }
+
+    if (new Date() > task.serviceOtpExpiry) {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has expired. Please generate a new one.'
+      });
+    }
+
+    // Verify OTP
+    if (task.serviceOtp !== parseInt(otp)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid OTP. Please try again.'
+      });
+    }
+
+    // Mark OTP as verified and update task status
+    task.otpVerified = true;
+    task.serviceOtp = undefined; // Clear OTP after verification
+    task.serviceOtpExpiry = undefined;
+    
+    // Add tracking entry
+    task.tracking.push({
+      message: 'Service started after OTP verification',
+      status: 'inProgress',
+      date: new Date(),
+      type: 'service_start'
+    });
+
+    await task.save();
+
+    res.json({
+      success: true,
+      message: 'OTP verified successfully. Service can now be started.',
+      data: task
+    });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error verifying OTP'
+    });
+  }
+};
+
+exports.completeService = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { notes, customerFeedback } = req.body;
+    const partnerId = req.user.id;
+
+    // Find the task
+    const task = await Cart.findOne({ 
+      _id: taskId, 
+      assignedPartner: partnerId,
+      status: 'inProgress'
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found or not in progress'
+      });
+    }
+
+    // Check if OTP was verified before allowing completion
+    if (!task.otpVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Service cannot be completed without OTP verification. Please start the service first.'
+      });
+    }
+
+    // Update task status to completed
+    task.status = 'completed';
+    task.completedAt = new Date();
+    task.serviceNotes = notes;
+    task.customerFeedback = customerFeedback;
+
+    // Add tracking entry
+    task.tracking.push({
+      message: 'Service completed successfully',
+      status: 'completed',
+      date: new Date(),
+      type: 'completion'
+    });
+
+    await task.save();
+
+    // TODO: Send completion notification to user
+
+    res.json({
+      success: true,
+      message: 'Service completed successfully',
+      data: task
+    });
+  } catch (error) {
+    console.error('Complete service error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error completing service'
+    });
+  }
+};
+
+exports.updateServiceStatus = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { status, notes } = req.body;
+    const partnerId = req.user.id;
+
+    const validStatuses = ['inProgress', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status'
+      });
+    }
+
+    const task = await Cart.findOne({ 
+      _id: taskId, 
+      assignedPartner: partnerId
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found'
+      });
+    }
+
+    // Special handling for completion status
+    if (status === 'completed' && !task.otpVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Service cannot be completed without OTP verification. Please start the service first.'
+      });
+    }
+
+    // Update task
+    task.status = status;
+    if (notes) task.serviceNotes = notes;
+
+    if (status === 'completed') {
+      task.completedAt = new Date();
+    }
+
+    // Add tracking entry
+    task.tracking.push({
+      message: `Status changed to ${status}`,
+      status: status,
+      date: new Date(),
+      notes: notes
+    });
+
+    await task.save();
+
+    res.json({
+      success: true,
+      message: `Service ${status} successfully`,
+      data: task
+    });
+  } catch (error) {
+    console.error('Update service status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating service status'
+    });
   }
 };

@@ -36,7 +36,16 @@ router.get("/single/:id", partnerController.getSinglePartner);
 
 
 //get all partner
-
 router.get("/", partnerController.getAllPartenrs);
+
+// ADD THESE NEW ROUTES FOR DASHBOARD
+router.get("/dashboard", authMiddleware, partnerController.getPartnerDashboard);
+router.patch("/tasks/:taskId/status", authMiddleware, partnerController.updateTaskStatus);
+
+// Add to your partner routes
+router.patch('/tasks/:taskId/start-service', authMiddleware, partnerController.startService);
+router.post('/tasks/:taskId/verify-otp', authMiddleware, partnerController.verifyServiceOtp);
+router.patch('/tasks/:taskId/complete', authMiddleware, partnerController.completeService);
+router.patch('/tasks/:taskId/status', authMiddleware, partnerController.updateServiceStatus);
 
 module.exports = router;
