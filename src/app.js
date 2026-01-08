@@ -7,22 +7,22 @@ const morgan = require('morgan');
 const routes = require('./routes/index');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
+// const fs = require('fs');
+// const path = require('path');
 
 const app = express();
 app.use(express.json());
 // Enable CORS for all routes
 app.use(cors());
 
-const logStream = fs.createWriteStream(path.join(__dirname, 'requests.log'), { flags: 'a' });
+// const logStream = fs.createWriteStream(path.join(__dirname, 'requests.log'), { flags: 'a' });
 
 // Middleware to log requests with timestamps to a file
-morgan.token('time', () => new Date().toISOString());
-app.use(morgan(':method :url :status :res[content-length] - :response-time ms - :time', { stream: logStream }));
+// morgan.token('time', () => new Date().toISOString());
+// app.use(morgan(':method :url :status :res[content-length] - :response-time ms - :time', { stream: logStream }));
 // app.use(morgan(':method :url :status :res[content-length] - :response-time ms - :time'));
 
-
+app.use(morgan('dev'));
 
 // Rate limiting middleware
 const limiter = rateLimit({
