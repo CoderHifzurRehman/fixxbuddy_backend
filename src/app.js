@@ -11,6 +11,8 @@ const cors = require('cors');
 // const path = require('path');
 
 const app = express();
+
+app.set('trust proxy', 1); // ✅ FIX FOR VERCEL
 app.use(express.json());
 // Enable CORS for all routes
 app.use(cors());
@@ -26,9 +28,11 @@ app.use(morgan('dev'));
 
 // Rate limiting middleware
 const limiter = rateLimit({
-    windowMs: 1 * 30 * 1000, // 1 minute
-    max: process.env.RATE_LIMIT || 5, // limit each IP to 5 requests per windowMs
+    windowMs: 30 * 1000, // 1 minute
+    max: process.env.RATE_LIMIT || 50, // limit each IP to 5 requests per windowMs
     message: { error: 'Too many requests, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
     // statusCode: 429,
 });
 
