@@ -3,6 +3,7 @@ const Partner = require("../models/partner.model");
 const { generateToken } = require("../utils/jwt");
 const bcrypt = require("bcryptjs");
 const Cart = require('../models/cart.model');
+const Quotation = require('../models/quotation.model');
 const { uploadMultipleImagesToS3 } = require("../utils/uploadImages");
 const { serviceStartOtpTemplate } = require("../utils/mailingFunction");
 
@@ -487,10 +488,25 @@ exports.getPartnerDashboard = async (req, res) => {
     const completedTasks = tasks.filter(task => task.status === 'completed');
     const earnings = completedTasks.reduce((total, task) => total + (task.serviceCost * task.quantity), 0);
     
+    // Get all quotations for this partner
+    const quotations = await Quotation.find({ partnerId })
+      .populate('userId', 'firstName lastName email')
+      .populate('applicationTypeId', 'serviceName')
+      .sort({ createdAt: -1 });
+    
+    // Link quotations to tasks
+    const tasksWithQuotations = tasks.map(task => {
+      const taskObj = task.toObject();
+      // Find quotation for this task (matching custom orderId string)
+      taskObj.quotation = quotations.find(q => q.orderId === task.orderId);
+      return taskObj;
+    });
+
     res.json({
       success: true,
-      tasks,
+      tasks: tasksWithQuotations,
       earnings,
+      quotation: quotations,
       stats: {
         total: tasks.length,
         pending: tasks.filter(t => t.status === 'pending').length,
@@ -531,6 +547,7 @@ exports.updateTaskStatus = async (req, res) => {
     const validTransitions = {
       'pending': ['inProgress', 'assigned'],
       'assigned': ['completed', 'cancelled', 'inProgress', 'pending'],
+      'inProgress': ['completed', 'cancelled', 'inProgress'],
     };
     
     if (!validTransitions[task.status]?.includes(status)) {
@@ -550,9 +567,15 @@ exports.updateTaskStatus = async (req, res) => {
       'complete': 'Task completed by partner',
       'cancel': 'Task cancelled by partner'
     };
+
+    let setMessage = actionMessages[partnerAction] || `Status changed to ${status}`;
+    if(req.body.trackingUpdate && req.body.trackingUpdate.message){
+      setMessage = req.body.trackingUpdate.message;
+    }
+    console.log(req.body)
     
     task.tracking.push({
-      message: actionMessages[partnerAction] || `Status changed to ${status}`,
+      message: setMessage || `Status changed to ${status}`,
       status: status,
       date: new Date()
     });

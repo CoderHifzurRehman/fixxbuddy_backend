@@ -9,6 +9,8 @@ const applicationTypeRoutes = require("./applicationType.routes")
 const serviceTypeRoutes = require("./serviceType.routes")
 
 const cartRoutes = require('./cart.routes');
+const rateCardRoutes = require('./rateCard.routes');
+const quotationRoutes = require('./quotation.routes');
 
 
 const router = express.Router();
@@ -33,6 +35,8 @@ router.use("/applicationType", applicationTypeRoutes)
 router.use("/serviceType", serviceTypeRoutes)
 
 router.use('/cart', cartRoutes);
+router.use('/rate-cards', rateCardRoutes);
+router.use('/quotation', quotationRoutes);
 
 
 module.exports = router;
