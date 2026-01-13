@@ -115,6 +115,16 @@ const partnerSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    isDeleted: {
+      type: Boolean,
+      default: false
+    },
+    deletedAt: {
+      type: Date
+    },
+    deletedBy: {
+      type: String
+    }
   },
   {
     timestamps: true,

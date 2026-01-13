@@ -2,6 +2,7 @@ const Cart = require('../models/cart.model');
 const MainservicesCategories = require('../models/mainServicesCategories.model')
 const Application = require('../models/applicationType.model');
 const mongoose = require('mongoose');
+const { getIO } = require('../socket');
 
 
 const generateOrderId = () => {
@@ -635,6 +636,25 @@ const adminUpdateCartItemStatus = async (req, res) => {
         success: false,
         message: 'Cart item not found'
       });
+    }
+
+    // Real-time socket notification for partner
+    if (updatedItem.assignedPartner) {
+      try {
+        const io = getIO();
+        const partnerId = updatedItem.assignedPartner._id.toString();
+        
+        // If a new partner was just assigned, use 'new-task', otherwise 'task-updated'
+        const eventName = assignedPartner ? 'new-task' : 'task-updated';
+        
+        io.to(`partner-${partnerId}`).emit(eventName, {
+          task: updatedItem,
+          message: assignedPartner ? 'A new task has been assigned to you!' : 'One of your tasks has been updated.'
+        });
+        console.log(`[SOCKET] Emitted ${eventName} to partner-${partnerId}`);
+      } catch (socketError) {
+        console.error('[SOCKET] Error emitting task event:', socketError);
+      }
     }
 
     res.status(200).json({

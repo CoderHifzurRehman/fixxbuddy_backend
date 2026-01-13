@@ -27,7 +27,11 @@ router.post('/upload/images/:id', upload.fields([
 router.post("/login", partnerController.partnerLogin);
 
 
-router.delete("/:id", partnerController.deletePartner);
+// Partner Management
+router.patch("/:id/soft-delete", partnerController.softDeletePartner);
+router.get("/deleted", partnerController.getDeletedPartners);
+router.patch("/:id/restore", partnerController.restorePartner);
+router.delete("/:id", partnerController.softDeletePartner); // Keep delete verb but use soft delete logic
 
 router.put("/:id", partnerController.updateProfile);
 

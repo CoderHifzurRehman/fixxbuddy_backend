@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Quotation = require('../models/quotation.model');
 const RateCard = require('../models/rateCard.model');
+const { getIO } = require('../socket');
 
 // Create a new quotation
 exports.createQuotation = async (req, res) => {
@@ -218,6 +219,20 @@ exports.acceptQuotation = async (req, res) => {
        }
     }
 
+    // Emit socket event to partner
+    try {
+      const io = getIO();
+      io.to(`partner-${quotation.partnerId}`).emit('quotation-response', {
+        partnerId: quotation.partnerId,
+        quotationId: quotation._id,
+        orderId: quotation.orderId,
+        status: 'Accepted',
+        message: 'Your quotation has been accepted by the customer!'
+      });
+    } catch (socketError) {
+      console.error('[SOCKET] Error emitting quotation-response:', socketError);
+    }
+
     res.status(200).json({ success: true, message: 'Quotation accepted', quotation });
   } catch (error) {
     console.error('Error accepting quotation:', error);
@@ -254,6 +269,20 @@ exports.rejectQuotation = async (req, res) => {
         });
         await cart.save();
       }
+    }
+
+    // Emit socket event to partner
+    try {
+      const io = getIO();
+      io.to(`partner-${quotation.partnerId}`).emit('quotation-response', {
+        partnerId: quotation.partnerId,
+        quotationId: quotation._id,
+        orderId: quotation.orderId,
+        status: 'Rejected',
+        message: 'Your quotation has been rejected by the customer.'
+      });
+    } catch (socketError) {
+      console.error('[SOCKET] Error emitting quotation-response:', socketError);
     }
 
     res.status(200).json({ success: true, message: 'Quotation rejected', quotation });

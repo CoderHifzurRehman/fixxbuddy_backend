@@ -351,8 +351,8 @@ exports.getSinglePartner = async (req, res) => {
     // Assuming you're using a MongoDB model called partner
     const partner = await Partner.findById(partnerId);
 
-    // Check if the vehicle exists
-    if (!partner) {
+    // Check if the partner exists and is not soft-deleted
+    if (!partner || partner.isDeleted) {
       return res.status(404).send({
         statusCode: 404,
         message: "Partner not found",
@@ -411,7 +411,7 @@ exports.getAllPartenrs = async (req, res) => {
     const limit = req.query.limit || 50;
     const sorted = { createdAt: -1 };
     const query = {
-      // userId: req.user.id,
+      isDeleted: { $ne: true }
     };
     const partner = await exports.PartnerServicesPagination(
       page,
@@ -847,5 +847,79 @@ exports.updateServiceStatus = async (req, res) => {
       success: false,
       message: 'Error updating service status'
     });
+  }
+};
+
+// Soft Delete Partner
+exports.softDeletePartner = async (req, res) => {
+  try {
+    const partnerId = req.params.id;
+    const { deletedBy } = req.body;
+
+    const partner = await Partner.findById(partnerId);
+    if (!partner) {
+      return res.status(404).send({ statusCode: 404, message: "Partner not found" });
+    }
+
+    partner.isDeleted = true;
+    partner.deletedAt = new Date();
+    partner.deletedBy = deletedBy || "Admin";
+    
+    await partner.save();
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "Partner moved to recycle bin successfully",
+    });
+  } catch (err) {
+    res.status(500).send({ statusCode: 500, message: err.message });
+  }
+};
+
+// Get Deleted Partners (Recycle Bin)
+exports.getDeletedPartners = async (req, res) => {
+  try {
+    // Auto-cleanup: Permanently delete partners deleted > 30 days ago
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    await Partner.deleteMany({
+      isDeleted: true,
+      deletedAt: { $lt: thirtyDaysAgo }
+    });
+
+    const deletedPartners = await Partner.find({ isDeleted: true }).sort({ deletedAt: -1 });
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "Deleted partners fetched successfully",
+      data: deletedPartners
+    });
+  } catch (err) {
+    res.status(500).send({ statusCode: 500, message: err.message });
+  }
+};
+
+// Restore Partner
+exports.restorePartner = async (req, res) => {
+  try {
+    const partnerId = req.params.id;
+
+    const partner = await Partner.findById(partnerId);
+    if (!partner) {
+      return res.status(404).send({ statusCode: 404, message: "Partner not found" });
+    }
+
+    partner.isDeleted = false;
+    partner.deletedAt = undefined;
+    partner.deletedBy = undefined;
+
+    await partner.save();
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "Partner restored successfully",
+      data: partner
+    });
+  } catch (err) {
+    res.status(500).send({ statusCode: 500, message: err.message });
   }
 };
