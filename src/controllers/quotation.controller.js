@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const Quotation = require('../models/quotation.model');
 const RateCard = require('../models/rateCard.model');
-const { getIO } = require('../socket');
 
 // Create a new quotation
 exports.createQuotation = async (req, res) => {
@@ -58,22 +57,6 @@ exports.createQuotation = async (req, res) => {
     });
 
     const savedQuotation = await newQuotation.save();
-
-    // Real-time socket notification for customer
-    try {
-      const io = getIO();
-      io.to(`user-${userId}`).emit('new-quotation', {
-        partnerId,
-        quotationId: savedQuotation._id,
-        orderId,
-        quotation: savedQuotation,
-        message: 'A new quotation has been generated for your service!'
-      });
-      console.log(`[SOCKET] Emitted new-quotation to user-${userId}`);
-    } catch (socketError) {
-      console.error('[SOCKET] Error emitting new-quotation:', socketError);
-    }
-
     res.status(201).json(savedQuotation);
 
   } catch (error) {
@@ -235,20 +218,6 @@ exports.acceptQuotation = async (req, res) => {
        }
     }
 
-    // Emit socket event to partner
-    try {
-      const io = getIO();
-      io.to(`partner-${quotation.partnerId}`).emit('quotation-response', {
-        partnerId: quotation.partnerId,
-        quotationId: quotation._id,
-        orderId: quotation.orderId,
-        status: 'Accepted',
-        message: 'Your quotation has been accepted by the customer!'
-      });
-    } catch (socketError) {
-      console.error('[SOCKET] Error emitting quotation-response:', socketError);
-    }
-
     res.status(200).json({ success: true, message: 'Quotation accepted', quotation });
   } catch (error) {
     console.error('Error accepting quotation:', error);
@@ -285,20 +254,6 @@ exports.rejectQuotation = async (req, res) => {
         });
         await cart.save();
       }
-    }
-
-    // Emit socket event to partner
-    try {
-      const io = getIO();
-      io.to(`partner-${quotation.partnerId}`).emit('quotation-response', {
-        partnerId: quotation.partnerId,
-        quotationId: quotation._id,
-        orderId: quotation.orderId,
-        status: 'Rejected',
-        message: 'Your quotation has been rejected by the customer.'
-      });
-    } catch (socketError) {
-      console.error('[SOCKET] Error emitting quotation-response:', socketError);
     }
 
     res.status(200).json({ success: true, message: 'Quotation rejected', quotation });
