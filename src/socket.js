@@ -23,6 +23,14 @@ const initSocket = (server) => {
       }
     });
 
+    // Join user/customer specific room
+    socket.on('join-user-room', (userId) => {
+      if (userId) {
+        socket.join(`user-${userId}`);
+        console.log(`[SOCKET] User ${userId} joined room: user-${userId}`);
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log('[SOCKET] Client disconnected:', socket.id);
       // Clean up map
