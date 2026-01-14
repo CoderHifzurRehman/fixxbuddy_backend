@@ -2,6 +2,7 @@ const Cart = require('../models/cart.model');
 const MainservicesCategories = require('../models/mainServicesCategories.model')
 const Application = require('../models/applicationType.model');
 const mongoose = require('mongoose');
+const pusher = require('../utils/pusher');
 
 
 const generateOrderId = () => {
@@ -313,6 +314,14 @@ const updateCartItemStatus = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Cart item not found'
+      });
+    }
+
+    if (status === 'pending') {
+      pusher.trigger("admin-channel", "new_request", {
+        message: "New service request received",
+        userId: req.user.id,
+        orderId: updatedItem.orderId
       });
     }
 
@@ -634,6 +643,28 @@ const adminUpdateCartItemStatus = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Cart item not found'
+      });
+    }
+
+    if (assignedPartner) {
+      pusher.trigger(`partner-${assignedPartner}`, "task_assigned", {
+        message: "A new task has been assigned to you",
+        taskId: updatedItem._id,
+        orderId: updatedItem.orderId
+      });
+
+      // Also notify admin to refresh their view if needed
+      pusher.trigger("admin-channel", "task_updated", {
+        message: "Task assigned to partner",
+        taskId: updatedItem._id,
+        orderId: updatedItem.orderId
+      });
+
+      // Notify User (Customer)
+      pusher.trigger(`user-${updatedItem.userId}`, "order_status_updated", {
+        message: "A partner has been assigned to your request",
+        taskId: updatedItem._id,
+        status: "assigned"
       });
     }
 

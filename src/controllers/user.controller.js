@@ -242,6 +242,7 @@ exports.getUserProfile = async (req, res) => {
     res.status(200).json({
       statusCode: 200,
       message: "User profile retrieved successfully",
+      userId: user._id,
       data: user,
     });
   } catch (err) {
