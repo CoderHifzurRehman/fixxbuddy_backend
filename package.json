@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.772.0",
+    "ably": "^2.17.0",
     "axios": "^1.7.9",
     "backend": "file:",
     "bcryptjs": "^2.4.3",

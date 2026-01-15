@@ -6,7 +6,7 @@ const Cart = require('../models/cart.model');
 const Quotation = require('../models/quotation.model');
 const { uploadMultipleImagesToS3 } = require("../utils/uploadImages");
 const { serviceStartOtpTemplate } = require("../utils/mailingFunction");
-const pusher = require("../utils/pusher");
+const ably = require("../utils/ably");
 
 const validatePasswordStrength = (password) => {
   const minLength = 8;
@@ -584,15 +584,15 @@ exports.updateTaskStatus = async (req, res) => {
     
     await task.save();
     
-    // Trigger Pusher event for admin
-    pusher.trigger("admin-channel", "task_updated", {
+    // Trigger Ably event for admin
+    ably.channels.get("admin-channel").publish("task_updated", {
       message: `Task ${status} by partner`,
       taskId: task._id,
       status: status
     });
 
     // Notify User (Customer)
-    pusher.trigger(`user-${task.userId}`, "order_status_updated", {
+    ably.channels.get(`user-${task.userId}`).publish("order_status_updated", {
       message: `Your task is now ${status}`,
       taskId: task._id,
       status: status
@@ -785,14 +785,14 @@ exports.completeService = async (req, res) => {
     await task.save();
 
     // Trigger Pusher event for admin
-    pusher.trigger("admin-channel", "task_updated", {
+    ably.channels.get("admin-channel").publish("task_updated", {
       message: `Task completed by partner`,
       taskId: task._id,
       status: 'completed'
     });
 
     // Notify User (Customer)
-    pusher.trigger(`user-${task.userId}`, "order_status_updated", {
+    ably.channels.get(`user-${task.userId}`).publish("order_status_updated", {
       message: `Your task is now completed`,
       taskId: task._id,
       status: 'completed'
@@ -868,7 +868,7 @@ exports.updateServiceStatus = async (req, res) => {
 
     // Trigger Pusher event for admin
     pusher.trigger("admin-channel", "task_updated", {
-      message: `Task ${status} by partner`,
+      message: `Task moved to ${status} by partner`,
       taskId: task._id,
       status: status
     });

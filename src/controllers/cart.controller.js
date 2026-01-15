@@ -2,7 +2,7 @@ const Cart = require('../models/cart.model');
 const MainservicesCategories = require('../models/mainServicesCategories.model')
 const Application = require('../models/applicationType.model');
 const mongoose = require('mongoose');
-const pusher = require('../utils/pusher');
+const ably = require('../utils/ably');
 
 
 const generateOrderId = () => {
@@ -318,10 +318,10 @@ const updateCartItemStatus = async (req, res) => {
     }
 
     if (status === 'pending') {
-      pusher.trigger("admin-channel", "new_request", {
+      ably.channels.get("admin-channel").publish("new_request", {
         message: "New service request received",
         userId: req.user.id,
-        orderId: updatedItem.orderId
+        orderId: updatedItem._id
       });
     }
 
@@ -647,21 +647,19 @@ const adminUpdateCartItemStatus = async (req, res) => {
     }
 
     if (assignedPartner) {
-      pusher.trigger(`partner-${assignedPartner}`, "task_assigned", {
+      ably.channels.get(`partner-${assignedPartner}`).publish("task_assigned", {
         message: "A new task has been assigned to you",
-        taskId: updatedItem._id,
-        orderId: updatedItem.orderId
+        taskId: updatedItem._id
       });
 
       // Also notify admin to refresh their view if needed
-      pusher.trigger("admin-channel", "task_updated", {
+      ably.channels.get("admin-channel").publish("task_updated", {
         message: "Task assigned to partner",
-        taskId: updatedItem._id,
-        orderId: updatedItem.orderId
+        taskId: updatedItem._id
       });
 
       // Notify User (Customer)
-      pusher.trigger(`user-${updatedItem.userId}`, "order_status_updated", {
+      ably.channels.get(`user-${updatedItem.userId}`).publish("order_status_updated", {
         message: "A partner has been assigned to your request",
         taskId: updatedItem._id,
         status: "assigned"
