@@ -3,15 +3,117 @@ function welcomeMailTemplate(data) {
 
     return `
     <html>
-        <body>
-          <h2>Welcome!</h2>
-          <p>Thank you for registering with us. Your One-Time Password (OTP) for verifying your account is:</p>
-          <h3 style="color: #4CAF50; font-size: 24px;">${otp}</h3>
-          <p>This OTP will expire in 10 minutes. Please enter it within that time frame to complete your registration.</p>
-          <p>If you did not request this verification, please ignore this email.</p>
-          <p>Best regards,<br>Your Company Team</p>
-        </body>
-    </html>`;
+<head>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 0;
+            background-color: #f4f7f9;
+        }
+        .container {
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            background-color: #2E5D9E;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header img {
+            max-width: 180px;
+        }
+        .content {
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .content h2 {
+            color: #2E5D9E;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .content p {
+            font-size: 16px;
+            color: #555555;
+            margin-bottom: 30px;
+        }
+        .otp-container {
+            background-color: #f0f7ff;
+            border: 2px dashed #2E5D9E;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            display: inline-block;
+        }
+        .otp-code {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2E5D9E;
+            letter-spacing: 5px;
+        }
+        .footer {
+            background-color: #f9fafb;
+            padding: 20px;
+            text-align: center;
+            font-size: 13px;
+            color: #888888;
+            border-top: 1px solid #eeeeee;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+        .social-links {
+            margin-top: 15px;
+        }
+        .social-links a {
+            color: #2E5D9E;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        .expiry-note {
+            font-size: 14px;
+            color: #e74c3c;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://fixxbuddy.s3.ap-south-1.amazonaws.com/Website/Images/fixxbuddy_white_logo.png" alt="Fixxbuddy Logo">
+        </div>
+        
+        <div class="content">
+            <h2>Welcome to Fixxbuddy!</h2>
+            <p>Thank you for joining our community. We're excited to have you on board. To complete your registration and verify your account, please use the One-Time Password (OTP) below:</p>
+            
+            <div class="otp-container">
+                <div class="otp-code">${otp}</div>
+            </div>
+            
+            <p class="expiry-note">This OTP is valid for 10 minutes only.</p>
+            
+            <p>If you did not request this verification, please ignore this email or contact our support team.</p>
+        </div>
+        
+        <div class="footer">
+            <p>© 2025 Fixxbuddy. All rights reserved.</p>
+            <p>Premium Urban Services for Modern Living</p>
+            <div class="social-links">
+                <a href="https://www.fixxbuddy.com/">Website</a>
+                <a href="https://www.fixxbuddy.com/terms">Terms</a>
+                <a href="https://www.fixxbuddy.com/privacy">Privacy</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
 }
 
 
@@ -32,7 +134,7 @@ function otpMailTemplate(data) {
             padding: 20px;
         }
         .header {
-            background-color: #2E5D9E;
+            background-color: #000000ff;
             padding: 20px;
             text-align: center;
             border-radius: 5px 5px 0 0;
@@ -83,7 +185,7 @@ function otpMailTemplate(data) {
 </head>
 <body>
     <div class="header">
-        <img src="https://fixxbuddy.s3.ap-south-1.amazonaws.com/Website/Images/logo.png" alt="Fixxbuddy Logo">
+        <img src="https://fixxbuddy.s3.ap-south-1.amazonaws.com/Website/Images/fixxbuddy_white_logo.png" alt="Fixxbuddy Logo">
     </div>
     
     <div class="content">
@@ -125,7 +227,7 @@ function serviceStartOtpTemplate(user, otp) {
               padding: 20px;
           }
           .header {
-              background-color: #2E5D9E;
+              background-color: #000000ff;
               padding: 20px;
               text-align: center;
               border-radius: 5px 5px 0 0;
@@ -168,7 +270,7 @@ function serviceStartOtpTemplate(user, otp) {
   </head>
   <body>
       <div class="header">
-          <img src="https://fixxbuddy.s3.ap-south-1.amazonaws.com/Website/Images/logo.png" alt="Fixxbuddy Logo">
+          <img src="https://fixxbuddy.s3.ap-south-1.amazonaws.com/Website/Images/fixxbuddy_white_logo.png" alt="Fixxbuddy Logo">
       </div>
       
       <div class="content">
