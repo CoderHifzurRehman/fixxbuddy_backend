@@ -5,6 +5,16 @@ const {
   uploadMultipleImagesToS3,
 } = require("../utils/uploadImages");
 
+// Simple in-memory cache
+let mainServicesCache = null;
+let cacheTimestamp = null;
+const CACHE_DURATION = 3600 * 1000; // 1 hour
+
+function clearMainServicesCache() {
+  mainServicesCache = null;
+  cacheTimestamp = null;
+}
+
 exports.createMainService = async (req, res) => {
   try {
     const { serviceHeading, serviceName, serviceDescription } = req.body;
@@ -38,6 +48,9 @@ exports.createMainService = async (req, res) => {
 
     // Save the new user to the database
     const savedMainservices = await newMainservices.save();
+
+    // Clear cache
+    clearMainServicesCache();
 
     res.status(201).send({
       statusCode: 201,
@@ -83,6 +96,9 @@ exports.updateMainService = async (req, res) => {
 
     // Save the updated service
     const updatedService = await service.save();
+
+    // Clear cache
+    clearMainServicesCache();
 
     res.status(200).send({
       statusCode: 200,
@@ -169,6 +185,9 @@ exports.deleteMainServices = async (req, res) => {
     // Delete the mainService
     await Mainservices.deleteOne({ _id: mainServiceId });
 
+    // Clear cache
+    clearMainServicesCache();
+
     res.status(200).send({
       statusCode: 200,
       message: "mainservice deleted successfully",
@@ -188,6 +207,18 @@ exports.getAllServices = async (req, res) => {
     const query = {
       // userId: req.user.id,
     };
+
+    // Check cache
+    const now = Date.now();
+    if (mainServicesCache && cacheTimestamp && (now - cacheTimestamp < CACHE_DURATION) && page == 1 && limit == 50) {
+      return res.status(200).send({
+        statusCode: 200,
+        message: "Main Servies fetch successfully (cached)",
+        pagination: mainServicesCache.pagination,
+        data: mainServicesCache.data,
+      });
+    }
+
     const services = await exports.MainServicesPagination(
       page,
       limit,
@@ -201,6 +232,12 @@ exports.getAllServices = async (req, res) => {
         statusCode: 404,
         message: "No services found for this criteria",
       });
+    }
+
+    // Set cache for default page/limit
+    if (page == 1 && limit == 50) {
+      mainServicesCache = services;
+      cacheTimestamp = now;
     }
 
     res.status(200).send({

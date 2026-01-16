@@ -1,4 +1,5 @@
 const { S3Client, PutObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const sharp = require('sharp');
 require('dotenv').config();
 
 // Load configuration from environment variables
@@ -60,6 +61,35 @@ const generateUniqueFileName = async (basePath, fileName) => {
   
   return { uniqueFileName: newFileName, uniqueFilePath: filePath };
 };
+
+// Helper function to optimize images
+const optimizeImage = async (file) => {
+  // Only optimize image files
+  if (!file.mimetype.startsWith('image/') || file.mimetype === 'image/svg+xml') {
+    return { buffer: file.buffer, extension: null };
+  }
+
+  try {
+    let pipeline = sharp(file.buffer);
+    const metadata = await pipeline.metadata();
+
+    // Resize if wider than 1200px
+    if (metadata.width > 1200) {
+      pipeline = pipeline.resize({ width: 1200, withoutEnlargement: true });
+    }
+
+    // Convert to webp for best compression
+    const buffer = await pipeline
+      .webp({ quality: 80 })
+      .toBuffer();
+
+    return { buffer, extension: 'webp' };
+  } catch (error) {
+    console.error('Sharp optimization error:', error);
+    // Fallback to original buffer if optimization fails
+    return { buffer: file.buffer, extension: null };
+  }
+};
 // Initialize the S3 client
 const s3 = new S3Client({
   region: region,
@@ -74,8 +104,22 @@ exports.uploadSingleImageToS3 = async (file, folderName) => {
   if (!file || !file.buffer) {
     throw new Error('Missing image file or file buffer');
   }
+
+  // Optimize image
+  const { buffer, extension } = await optimizeImage(file);
+  let fileName = file.originalname;
+  let mimetype = file.mimetype;
+
+  if (extension) {
+    // Replace extension if optimized to webp
+    const nameParts = fileName.split('.');
+    nameParts.pop();
+    fileName = `${nameParts.join('.')}.${extension}`;
+    mimetype = `image/${extension}`;
+  }
+
   const sanitizedFolderName = sanitizeS3Key(folderName);
-  const sanitizedFileName = sanitizeFileName(file.originalname);
+  const sanitizedFileName = sanitizeFileName(fileName);
   
   // Generate unique file name
   const { uniqueFileName, uniqueFilePath } = await generateUniqueFileName(sanitizedFolderName, sanitizedFileName);
@@ -84,8 +128,8 @@ exports.uploadSingleImageToS3 = async (file, folderName) => {
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: uniqueFilePath,
-      Body: file.buffer,
-      ContentType: file.mimetype,
+      Body: buffer,
+      ContentType: mimetype,
       ACL: 'public-read' // Make it publicly readable
     });
 
@@ -110,7 +154,19 @@ exports.uploadMultipleImagesToS3 = async (files, folderName) => {
       throw new Error('Missing image file or file buffer');
     }
 
-    const sanitizedFileName = sanitizeFileName(file.originalname);
+    // Optimize image
+    const { buffer, extension } = await optimizeImage(file);
+    let fileName = file.originalname;
+    let mimetype = file.mimetype;
+
+    if (extension) {
+      const nameParts = fileName.split('.');
+      nameParts.pop();
+      fileName = `${nameParts.join('.')}.${extension}`;
+      mimetype = `image/${extension}`;
+    }
+
+    const sanitizedFileName = sanitizeFileName(fileName);
     
     // Generate unique file name for each file
     const { uniqueFileName, uniqueFilePath } = await generateUniqueFileName(sanitizedFolderName, sanitizedFileName);
@@ -119,8 +175,8 @@ exports.uploadMultipleImagesToS3 = async (files, folderName) => {
       const command = new PutObjectCommand({
         Bucket: bucketName,
         Key: uniqueFilePath,
-        Body: file.buffer,
-        ContentType: file.mimetype,
+        Body: buffer,
+        ContentType: mimetype,
         ACL: 'public-read'
       });
 

@@ -28,8 +28,8 @@ app.use(morgan('dev'));
 
 // Rate limiting middleware
 const limiter = rateLimit({
-    windowMs: 30 * 1000, // 1 minute
-    max: process.env.RATE_LIMIT || 50, // limit each IP to 5 requests per windowMs
+    windowMs: 60 * 1000, // 1 minute
+    max: process.env.RATE_LIMIT || 100, // limit each IP to 100 requests per windowMs
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,

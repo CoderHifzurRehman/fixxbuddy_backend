@@ -392,9 +392,123 @@ exports.getServiceTypesByMainServiceWithHierarchy = async (req, res) => {
       };
     });
 
+    // Set cache control header for 5 minutes
+    res.set('Cache-Control', 'public, max-age=300');
+
     res.status(200).send({
       statusCode: 200,
       message: "Service types retrieved with hierarchy successfully.",
+      data: response
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+// NEW: Get service types by multiple main service names with full hierarchy
+exports.getBulkServiceTypesWithHierarchy = async (req, res) => {
+  try {
+    const { mainServiceNames } = req.body;
+
+    if (!mainServiceNames || !Array.isArray(mainServiceNames)) {
+      return res.status(400).send({
+        statusCode: 400,
+        message: "Invalid request. mainServiceNames must be an array.",
+      });
+    }
+
+    // 1. Find all active main services by names
+    const mainServices = await Mainservices.find({ 
+      serviceName: { $in: mainServiceNames },
+      isActive: true 
+    });
+    
+    if (mainServices.length === 0) {
+      return res.status(404).send({
+        statusCode: 404,
+        message: "No matching main services found.",
+      });
+    }
+
+    const mainServiceIds = mainServices.map(ms => ms._id);
+
+    // 2. Find all active categories for these main services
+    const categories = await MainServicesCategories.find({ 
+      mainServiceId: { $in: mainServiceIds },
+      isActive: true 
+    });
+
+    // 3. Find all active application types for these categories
+    const categoryIds = categories.map(c => c._id);
+    const applicationTypes = await ApplicationType.find({ 
+      mainServiceCategoriesId: { $in: categoryIds },
+      isActive: true 
+    });
+
+    // 4. Find all active service types for these application types
+    const applicationTypeIds = applicationTypes.map(a => a._id);
+    const serviceTypes = await ServiceType.find({ 
+      applicationTypeId: { $in: applicationTypeIds },
+      isActive: true 
+    });
+
+    // Build the response with hierarchy organized by main service name
+    const response = {};
+    
+    mainServiceNames.forEach(msName => {
+      const ms = mainServices.find(m => m.serviceName === msName);
+      if (!ms) return;
+
+      const msCategories = categories.filter(c => c.mainServiceId.equals(ms._id));
+      const msCategoryIds = msCategories.map(c => c._id);
+      
+      const msAppTypes = applicationTypes.filter(at => 
+        msCategoryIds.some(catId => at.mainServiceCategoriesId.equals(catId))
+      );
+      const msAppTypeIds = msAppTypes.map(at => at._id);
+      
+      const msServiceTypes = serviceTypes.filter(st => 
+        msAppTypeIds.some(atId => st.applicationTypeId.equals(atId))
+      );
+
+      response[msName] = msServiceTypes.map(serviceType => {
+        const applicationType = msAppTypes.find(a => 
+          a._id.equals(serviceType.applicationTypeId)
+        );
+        const category = msCategories.find(c => 
+          c._id.equals(applicationType.mainServiceCategoriesId)
+        );
+        
+        return {
+          serviceType,
+          hierarchy: {
+            mainService: {
+              id: ms._id,
+              name: ms.serviceName,
+              heading: ms.serviceHeading
+            },
+            category: {
+              id: category._id,
+              name: category.serviceName,
+              heading: category.serviceHeading
+            },
+            applicationType: {
+              id: applicationType._id,
+              name: applicationType.serviceName,
+              heading: applicationType.serviceHeading
+            }
+          }
+        };
+      });
+    });
+
+    // Set cache control header for 5 minutes
+    res.set('Cache-Control', 'public, max-age=300');
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "Bulk service types retrieved with hierarchy successfully.",
       data: response
     });
   } catch (err) {
