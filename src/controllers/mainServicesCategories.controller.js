@@ -55,7 +55,7 @@ exports.createMainServiceCategories = async (req, res) => {
 // Update an existing main service
 exports.updateMainServiceCategories = async (req, res) => {
   try {
-    const { mainServiceId, isModalOpen, serviceName, serviceHeading, serviceDescription } = req.body;
+    const { mainServiceId, isModalOpen, serviceName, serviceHeading, serviceDescription, isActive } = req.body;
     const serviceId = req.params.id; // Assuming you're using the service's ID for updates
 
     // Find the service by ID
@@ -83,6 +83,7 @@ exports.updateMainServiceCategories = async (req, res) => {
     service.serviceDescription = serviceDescription || service.serviceDescription;
     service.serviceName = serviceName || service.serviceName;
     service.serviceImage = serviceImage;
+    if (isActive !== undefined) service.isActive = isActive;
 
     // Save the updated service
     const updatedService = await service.save();
@@ -129,10 +130,14 @@ exports.getSingleMainServiceCategories = async (req, res) => {
 
 exports.getMainServiceCategoriesList = async (req, res) => {
   try {
-    const serviceId = req.params.id; // Get the serviceId from the URL parameter
+    const serviceId = req.params.id; 
+    const query = { mainServiceId: serviceId, isActive: true };
+    if (req.query.isactive !== undefined || req.query.all === 'true') {
+      delete query.isActive;
+    }
 
-    // Find the service by its ID
-    const servicecategories = await MainservicesCategories.find({ mainServiceId : serviceId});
+    // Find the service categories by mainServiceId and optional isActive
+    const servicecategories = await MainservicesCategories.find(query);
 
     if (!servicecategories) {
       return res.status(404).send({
@@ -217,9 +222,10 @@ exports.getAllServices = async (req, res) => {
     const page = req.query.page || 1;
     const limit = req.query.limit || 50;
     const sorted = { createdAt: -1 };
-    const query = {
-      // userId: req.user.id,
-    };
+    const query = { isActive: true };
+    if (req.query.isactive !== undefined || req.query.all === 'true') {
+      delete query.isActive;
+    }
     const services = await exports.MainServicesPagination(
       page,
       limit,

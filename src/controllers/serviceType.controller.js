@@ -73,7 +73,7 @@ exports.createServiceType = async (req, res) => {
 // Update an existing main service
 exports.updateServiceType = async (req, res) => {
   try {
-    const { applicationTypeId, serviceName, serviceHeading, serviceDescription, serviceCost, serviceDetails, serviceVideoLink, discountPercentage, discountValidUntil, discountTerms } = req.body;
+    const { applicationTypeId, serviceName, serviceHeading, serviceDescription, serviceCost, serviceDetails, serviceVideoLink, discountPercentage, discountValidUntil, discountTerms, isActive } = req.body;
     const serviceId = req.params.id; // Assuming you're using the service's ID for updates
 
     // Find the service by ID
@@ -113,6 +113,7 @@ exports.updateServiceType = async (req, res) => {
     service.discountValidUntil = discountValidUntil || service.discountValidUntil;
     service.discountTerms = discountTerms || service.discountTerms;
     service.rateCardPdf = rateCardPdf;
+    if (isActive !== undefined) service.isActive = isActive;
 
     // Save the updated service
     const updatedService = await service.save();
@@ -159,9 +160,13 @@ exports.getSingleServiceType= async (req, res) => {
 
 exports.getServiceTypeList = async (req, res) => {
   try {
-    const mainServiceCategorieId = req.params.id; // Get the mainServiceCategoryId from the URL parameter
+    const mainServiceCategorieId = req.params.id; 
+    const query = { applicationTypeId: mainServiceCategorieId, isActive: true };
+    if (req.query.isactive !== undefined || req.query.all === 'true') {
+      delete query.isActive;
+    }
     // Find the service by its ID
-    const applicationtype = await ServiceType.find({ applicationTypeId : mainServiceCategorieId});
+    const applicationtype = await ServiceType.find(query);
 
     if (!applicationtype) {
       return res.status(404).send({
@@ -266,9 +271,10 @@ exports.getAllServiceType = async (req, res) => {
     const page = req.query.page || 1;
     const limit = req.query.limit || 50;
     const sorted = { createdAt: -1 };
-    const query = {
-      // userId: req.user.id,
-    };
+    const query = { isActive: true };
+    if (req.query.isactive !== undefined || req.query.all === 'true') {
+      delete query.isActive;
+    }
     const services = await exports.MainServicesPagination(
       page,
       limit,

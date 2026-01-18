@@ -6,13 +6,17 @@ const {
 } = require("../utils/uploadImages");
 
 // Simple in-memory cache
-let mainServicesCache = null;
-let cacheTimestamp = null;
+let mainServicesActiveCache = null;
+let mainServicesAllCache = null;
+let activeCacheTimestamp = null;
+let allCacheTimestamp = null;
 const CACHE_DURATION = 3600 * 1000; // 1 hour
 
 function clearMainServicesCache() {
-  mainServicesCache = null;
-  cacheTimestamp = null;
+  mainServicesActiveCache = null;
+  mainServicesAllCache = null;
+  activeCacheTimestamp = null;
+  allCacheTimestamp = null;
 }
 
 exports.createMainService = async (req, res) => {
@@ -66,7 +70,7 @@ exports.createMainService = async (req, res) => {
 // Update an existing main service
 exports.updateMainService = async (req, res) => {
   try {
-    const { serviceName, serviceHeading, serviceDescription } = req.body;
+    const { serviceName, serviceHeading, serviceDescription, isActive } = req.body;
     const serviceId = req.params.id; // Assuming you're using the service's ID for updates
 
     // Find the service by ID
@@ -93,6 +97,7 @@ exports.updateMainService = async (req, res) => {
       serviceDescription || service.serviceDescription;
     service.serviceName = serviceName || service.serviceName;
     service.serviceImage = serviceImage;
+    if (isActive !== undefined) service.isActive = isActive;
 
     // Save the updated service
     const updatedService = await service.save();
@@ -204,19 +209,33 @@ exports.getAllServices = async (req, res) => {
     const page = req.query.page || 1;
     const limit = req.query.limit || 50;
     const sorted = { createdAt: -1 };
-    const query = {
-      // userId: req.user.id,
-    };
+    const query = { isActive: true };
+    if (req.query.isactive !== undefined || req.query.all === 'true') {
+      delete query.isActive;
+    }
 
     // Check cache
     const now = Date.now();
-    if (mainServicesCache && cacheTimestamp && (now - cacheTimestamp < CACHE_DURATION) && page == 1 && limit == 50) {
-      return res.status(200).send({
-        statusCode: 200,
-        message: "Main Servies fetch successfully (cached)",
-        pagination: mainServicesCache.pagination,
-        data: mainServicesCache.data,
-      });
+    const isShowAll = req.query.isactive !== undefined || req.query.all === 'true';
+    
+    if (isShowAll) {
+      if (mainServicesAllCache && allCacheTimestamp && (now - allCacheTimestamp < CACHE_DURATION) && page == 1 && limit == 50) {
+        return res.status(200).send({
+          statusCode: 200,
+          message: "Main Servies fetch successfully (cached all)",
+          pagination: mainServicesAllCache.pagination,
+          data: mainServicesAllCache.data,
+        });
+      }
+    } else {
+      if (mainServicesActiveCache && activeCacheTimestamp && (now - activeCacheTimestamp < CACHE_DURATION) && page == 1 && limit == 50) {
+        return res.status(200).send({
+          statusCode: 200,
+          message: "Main Servies fetch successfully (cached active)",
+          pagination: mainServicesActiveCache.pagination,
+          data: mainServicesActiveCache.data,
+        });
+      }
     }
 
     const services = await exports.MainServicesPagination(
@@ -236,8 +255,13 @@ exports.getAllServices = async (req, res) => {
 
     // Set cache for default page/limit
     if (page == 1 && limit == 50) {
-      mainServicesCache = services;
-      cacheTimestamp = now;
+      if (isShowAll) {
+        mainServicesAllCache = services;
+        allCacheTimestamp = now;
+      } else {
+        mainServicesActiveCache = services;
+        activeCacheTimestamp = now;
+      }
     }
 
     res.status(200).send({
