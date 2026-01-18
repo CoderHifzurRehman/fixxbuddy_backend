@@ -1,9 +1,7 @@
 const express = require('express');
 const serviceTypeController = require('../controllers/serviceType.controller');
 const multer = require('multer');
-// Set up Multer for file upload handling
-const storage = multer.memoryStorage(); // Store files in memory for easier uploading
-const upload = multer({ storage });
+const upload = require('../middlewares/upload');
 
 const {authMiddleware, authorizeRoles } = require('../middlewares/authMiddleware');
 const router = express.Router();

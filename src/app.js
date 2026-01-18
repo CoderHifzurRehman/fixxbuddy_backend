@@ -13,7 +13,7 @@ const cors = require('cors');
 const app = express();
 
 app.set('trust proxy', 1); // ✅ FIX FOR VERCEL
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 // Enable CORS for all routes
 app.use(cors());
 
@@ -41,10 +41,10 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // Middleware
-app.use(bodyParser.json());
-app.use(bodyParser.text());
+app.use(bodyParser.json({ limit: '20mb' }));
+app.use(bodyParser.text({ limit: '20mb' }));
  
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 app.get('/', (req, res) =>{    
     res.status(200).json({
