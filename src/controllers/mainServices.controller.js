@@ -1,4 +1,7 @@
 const Mainservices = require("../models/mainServices.model");
+const MainServicesCategories = require("../models/mainServicesCategories.model");
+const ApplicationType = require("../models/applicationType.model");
+const ServiceType = require("../models/serviceType.model");
 
 const {
   uploadSingleImageToS3,
@@ -301,5 +304,69 @@ exports.MainServicesPagination = async (page, limit, sorted, query) => {
     return { data, pagination };
   } catch (error) {
     throw new Error(error.message);
+  }
+};
+// NEW: Get full active hierarchy for coupons/selectors
+exports.getFullActiveHierarchy = async (req, res) => {
+  try {
+    // 1. Fetch all active Main Services
+    const mainServices = await Mainservices.find({ isActive: true }).lean();
+    
+    // 2. Fetch all active Categories
+    const categories = await MainServicesCategories.find({ isActive: true }).lean();
+
+    // 3. Fetch all active Application Types
+    const applicationTypes = await ApplicationType.find({ isActive: true }).lean();
+
+    // 4. Fetch all active Service Types
+    const serviceTypes = await ServiceType.find({ isActive: true }).lean();
+
+    // 5. Build the tree
+    // Create maps for faster lookup
+    const catMap = {};
+    categories.forEach(c => {
+        c.applicationTypes = [];
+        catMap[c._id.toString()] = c;
+    });
+
+    const appMap = {};
+    applicationTypes.forEach(a => {
+        a.serviceTypes = [];
+        appMap[a._id.toString()] = a;
+    });
+
+    // Link Service Types to Application Types
+    serviceTypes.forEach(s => {
+        if (s.applicationTypeId && appMap[s.applicationTypeId.toString()]) {
+            appMap[s.applicationTypeId.toString()].serviceTypes.push(s);
+        }
+    });
+
+    // Link Application Types to Categories
+    applicationTypes.forEach(a => {
+        if (a.mainServiceCategoriesId && catMap[a.mainServiceCategoriesId.toString()]) {
+             catMap[a.mainServiceCategoriesId.toString()].applicationTypes.push(a);
+        }
+    });
+
+    // Link Categories to Main Services
+    // We'll iterate main services and filter matching categories from the pre-filled map or just filter the array
+    const hierarchy = mainServices.map(ms => {
+        const msCategories = categories.filter(c => c.mainServiceId.toString() === ms._id.toString());
+        return {
+            ...ms,
+            categories: msCategories
+        };
+    });
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "Full active hierarchy retrieved successfully.",
+      data: hierarchy
+    });
+
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
   }
 };

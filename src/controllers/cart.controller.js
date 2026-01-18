@@ -295,10 +295,11 @@ const updateCartItemStatus = async (req, res) => {
 
     const updateData = { status };
     
-    // Only update address/contact when changing to pending status
     if (status === 'pending') {
       updateData.deliveryAddress = deliveryAddress;
       updateData.contactNumber = contactNumber;
+      if (req.body.couponCode) updateData.couponCode = req.body.couponCode;
+      if (req.body.discountAmount) updateData.discountAmount = req.body.discountAmount;
     }
 
     const updatedItem = await Cart.findOneAndUpdate(

@@ -18,6 +18,9 @@ router.get("/", mainServicesController.getAllServices)
 router.put('/update/:id', upload.single('file'), mainServicesController.updateMainService);
 
 
+// Route to get full active hierarchy
+router.get('/hierarchy', mainServicesController.getFullActiveHierarchy);
+
 // Route to get a single main service by ID
 router.get('/:id', mainServicesController.getSingleMainService);
 

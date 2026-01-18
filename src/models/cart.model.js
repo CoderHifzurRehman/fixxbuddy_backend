@@ -92,6 +92,13 @@ const cartSchema = new mongoose.Schema(
   },
   customerFeedback: {
     type: String
+  },
+  couponCode: {
+    type: String
+  },
+  discountAmount: {
+    type: Number,
+    default: 0
   }
   },
   {

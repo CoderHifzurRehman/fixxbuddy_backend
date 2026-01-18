@@ -5,7 +5,7 @@ const serviceTypeSchema = new mongoose.Schema(
   {
     applicationTypeId:{
       type: mongoose.Schema.Types.ObjectId,
-      ref: "ApplicationType"
+      ref: "applicationType"
     },
     serviceHeading: {
       type: String,

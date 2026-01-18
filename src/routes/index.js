@@ -12,6 +12,7 @@ const cartRoutes = require('./cart.routes');
 const rateCardRoutes = require('./rateCard.routes');
 const quotationRoutes = require('./quotation.routes');
 const hubRoutes = require('./hub.routes');
+const couponRoutes = require('./coupon.routes');
 
 
 
@@ -40,6 +41,7 @@ router.use('/cart', cartRoutes);
 router.use('/rate-cards', rateCardRoutes);
 router.use('/quotation', quotationRoutes);
 router.use('/hubs', hubRoutes);
+router.use('/coupons', couponRoutes);
 
 
 
