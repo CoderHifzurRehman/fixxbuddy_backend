@@ -29,14 +29,15 @@ exports.userRegistration = async (req, res) => {
     const { firstName, lastName, email, password } = req.body;
 
     const { file } = req;
-    if (!file) {
-      return res.status(400).send("No file uploaded.");
-    }
-    const folderName = `user/profilePic/${email}`; // Customize the folder name if needed
-    // console.log(folderName);
+    let imageUrl = "";
+    
+    if (file) {
+      const folderName = `user/profilePic/${email}`; // Customize the folder name if needed
+      // console.log(folderName);
 
-    const imageUrl = await uploadSingleImageToS3(file, folderName);
-    // console.log(imageUrl);
+      imageUrl = await uploadSingleImageToS3(file, folderName);
+      // console.log(imageUrl);
+    }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
