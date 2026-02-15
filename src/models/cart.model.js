@@ -47,11 +47,11 @@ const cartSchema = new mongoose.Schema(
     assignedPartner: { type: mongoose.Schema.Types.ObjectId, ref: 'partner' },
     scheduledDate: Date,
     tracking: [{
-        message: String,
-        date: { type: Date, default: Date.now },
-        status: String
+      message: String,
+      date: { type: Date, default: Date.now },
+      status: String
     }],
-    
+
     // New fields for address and contact
     deliveryAddress: {
       _id: mongoose.Schema.Types.ObjectId,
@@ -70,36 +70,46 @@ const cartSchema = new mongoose.Schema(
       isPrimary: Boolean
     },
     // OTP fields for service start verification
-  serviceOtp: {
-    type: Number,
-    required: false
-  },
-  serviceOtpExpiry: {
-    type: Date,
-    required: false
-  },
-  otpVerified: {
-    type: Boolean,
-    default: false
-  },
-  
-  // Service completion fields
-  completedAt: {
-    type: Date
-  },
-  serviceNotes: {
-    type: String
-  },
-  customerFeedback: {
-    type: String
-  },
-  couponCode: {
-    type: String
-  },
-  discountAmount: {
-    type: Number,
-    default: 0
-  }
+    serviceOtp: {
+      type: Number,
+      required: false
+    },
+    serviceOtpExpiry: {
+      type: Date,
+      required: false
+    },
+    otpVerified: {
+      type: Boolean,
+      default: false
+    },
+
+    // Service completion fields
+    completedAt: {
+      type: Date
+    },
+    serviceNotes: {
+      type: String
+    },
+    customerFeedback: {
+      type: String
+    },
+    couponCode: {
+      type: String
+    },
+    discountAmount: {
+      type: Number,
+      default: 0
+    },
+    serviceImages: {
+      preService: {
+        type: [String],
+        default: []
+      },
+      postService: {
+        type: [String],
+        default: []
+      }
+    }
   },
   {
     timestamps: true,

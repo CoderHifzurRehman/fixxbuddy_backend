@@ -3,7 +3,7 @@ const partnerController = require('../controllers/partner.controller');
 const multer = require('multer');
 const upload = require('../middlewares/upload');
 
-const {authMiddleware, authorizeRoles } = require('../middlewares/authMiddleware');
+const { authMiddleware, authorizeRoles } = require('../middlewares/authMiddleware');
 const router = express.Router();
 
 
@@ -15,12 +15,12 @@ router.post("/registration", partnerController.partnerRegistration);
 router.patch("/profile/update/:id", partnerController.updateProfile);
 
 router.post('/upload/images/:id', upload.fields([
-    { name: 'profilePic', maxCount: 1 },
-    { name: 'aadharFrontPic', maxCount: 1 },
-    { name: 'aadharBackPic', maxCount: 1 },
-    { name: 'PanPic', maxCount: 1 },
-    { name: 'pcc', maxCount: 1 }
-  ]), partnerController.uploadImages);
+  { name: 'profilePic', maxCount: 1 },
+  { name: 'aadharFrontPic', maxCount: 1 },
+  { name: 'aadharBackPic', maxCount: 1 },
+  { name: 'PanPic', maxCount: 1 },
+  { name: 'pcc', maxCount: 1 }
+]), partnerController.uploadImages);
 
 router.post("/login", partnerController.partnerLogin);
 
@@ -49,5 +49,6 @@ router.patch('/tasks/:taskId/start-service', authMiddleware, partnerController.s
 router.post('/tasks/:taskId/verify-otp', authMiddleware, partnerController.verifyServiceOtp);
 router.patch('/tasks/:taskId/complete', authMiddleware, partnerController.completeService);
 router.patch('/tasks/:taskId/status', authMiddleware, partnerController.updateServiceStatus);
+router.post('/tasks/:taskId/upload-images', authMiddleware, upload.array('images', 10), partnerController.uploadServiceImages);
 
 module.exports = router;

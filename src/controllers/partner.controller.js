@@ -43,10 +43,10 @@ exports.partnerRegistration = async (req, res) => {
       createdBy,
     } = req.body;
 
-     // Backward compatibility for fullName
+    // Backward compatibility for fullName
     let firstNameVal = firstName;
     let lastNameVal = lastName;
-    
+
     if (!firstName && req.body.fullName) {
       const nameParts = req.body.fullName.split(' ');
       firstNameVal = nameParts[0] || '';
@@ -116,7 +116,7 @@ exports.partnerRegistration = async (req, res) => {
     res.status(201).send({
       statusCode: 201,
       message: "Partner registered successfully.",
-      data: { email,partnerId: newPartner._id, address: newPartner.address },
+      data: { email, partnerId: newPartner._id, address: newPartner.address },
     });
   } catch (err) {
     const errorMsg = err.message || "Unknown error";
@@ -168,18 +168,18 @@ exports.uploadImages = async (req, res) => {
     const partnerId = req.params.id;
     const folderName = `partner/images/${partnerId}`;
     const updateFields = {};
-  
+
     // Upload and update only if the image exists
     if (profilePic && profilePic[0]) {
       const [profilePicUrl] = await uploadMultipleImagesToS3([profilePic[0]], folderName);
       updateFields.profilePic = profilePicUrl;
     }
-  
+
     if (aadharFrontPic && aadharFrontPic[0]) {
       const [aadharFrontPicUrl] = await uploadMultipleImagesToS3([aadharFrontPic[0]], folderName);
       updateFields.aadharFrontPic = aadharFrontPicUrl;
     }
-    
+
     if (aadharBackPic && aadharBackPic[0]) {
       const [aadharBackPicUrl] = await uploadMultipleImagesToS3([aadharBackPic[0]], folderName);
       updateFields.aadharBackPic = aadharBackPicUrl;
@@ -194,22 +194,22 @@ exports.uploadImages = async (req, res) => {
       const [pccUrl] = await uploadMultipleImagesToS3([pcc[0]], folderName);
       updateFields.pcc = pccUrl;
     }
-  
+
     if (Object.keys(updateFields).length === 0) {
       return res.status(400).send({
         statusCode: 400,
         message: "No images provided for upload.",
       });
     }
-  
+
     const updatedUser = await Partner.findByIdAndUpdate(partnerId, updateFields, {
       new: true,
     });
-  
+
     if (!updatedUser) {
       return res.status(404).send({ statusCode: 404, message: "User not found." });
     }
-  
+
     res.status(200).send({
       statusCode: 200,
       message: "Images uploaded and updated successfully.",
@@ -223,7 +223,7 @@ exports.uploadImages = async (req, res) => {
       error: error.message,
     });
   }
-  
+
 };
 
 
@@ -244,7 +244,7 @@ exports.updateProfile = async (req, res) => {
       expertise,
       hub,
     } = req.body;
-    
+
     // First get the current partner data
     const existingPartner = await Partner.findById(req.params.id);
     if (!existingPartner) {
@@ -253,11 +253,11 @@ exports.updateProfile = async (req, res) => {
         message: "Partner not found",
       });
     }
-    
+
     // Backward compatibility
     let firstNameVal = firstName !== undefined ? firstName.trim() : existingPartner.firstName;
     let lastNameVal = lastName !== undefined ? lastName.trim() : existingPartner.lastName;
-    
+
     if (!firstName && req.body.fullName) {
       const nameParts = req.body.fullName.split(' ');
       firstNameVal = nameParts[0] || '';
@@ -278,7 +278,7 @@ exports.updateProfile = async (req, res) => {
     const updatedFields = {
       firstName: firstNameVal,
       lastName: lastNameVal,
-      fullName: lastNameVal.trim() 
+      fullName: lastNameVal.trim()
         ? `${firstNameVal.trim()} ${lastNameVal.trim()}`
         : firstNameVal.trim(),
       email,
@@ -478,23 +478,23 @@ exports.PartnerServicesPagination = async (page, limit, sorted, query) => {
 exports.getPartnerDashboard = async (req, res) => {
   try {
     const partnerId = req.user.id;
-    
+
     // Get all tasks assigned to this partner
-    const tasks = await Cart.find({ 
-      assignedPartner: partnerId 
+    const tasks = await Cart.find({
+      assignedPartner: partnerId
     }).populate('userId', 'name email firstName lastName')
       .sort({ createdAt: -1 });
-    
+
     // Calculate earnings from completed tasks
     const completedTasks = tasks.filter(task => task.status === 'completed');
     const earnings = completedTasks.reduce((total, task) => total + (task.serviceCost * task.quantity), 0);
-    
+
     // Get all quotations for this partner
     const quotations = await Quotation.find({ partnerId })
       .populate('userId', 'firstName lastName email')
       .populate('applicationTypeId', 'serviceName')
       .sort({ createdAt: -1 });
-    
+
     // Link quotations to tasks
     const tasksWithQuotations = tasks.map(task => {
       const taskObj = task.toObject();
@@ -531,37 +531,37 @@ exports.updateTaskStatus = async (req, res) => {
     const { taskId } = req.params;
     const { status, partnerAction } = req.body;
     const partnerId = req.user.id;
-    
+
     // Find the task assigned to this partner
-    const task = await Cart.findOne({ 
-      _id: taskId, 
-      assignedPartner: partnerId 
+    const task = await Cart.findOne({
+      _id: taskId,
+      assignedPartner: partnerId
     });
-    
+
     if (!task) {
       return res.status(404).json({
         success: false,
         message: 'Task not found or not assigned to you'
       });
     }
-    
+
     // Validate status transition
     const validTransitions = {
       'pending': ['inProgress', 'assigned'],
       'assigned': ['completed', 'cancelled', 'inProgress', 'pending'],
       'inProgress': ['completed', 'cancelled', 'inProgress'],
     };
-    
+
     if (!validTransitions[task.status]?.includes(status)) {
       return res.status(400).json({
         success: false,
         message: `Invalid status transition from ${task.status} to ${status}`
       });
     }
-    
+
     // Update task status
     task.status = status;
-    
+
     // Add tracking entry
     const actionMessages = {
       'accept': 'Task accepted by partner',
@@ -571,19 +571,19 @@ exports.updateTaskStatus = async (req, res) => {
     };
 
     let setMessage = actionMessages[partnerAction] || `Status changed to ${status}`;
-    if(req.body.trackingUpdate && req.body.trackingUpdate.message){
+    if (req.body.trackingUpdate && req.body.trackingUpdate.message) {
       setMessage = req.body.trackingUpdate.message;
     }
     console.log(req.body)
-    
+
     task.tracking.push({
       message: setMessage || `Status changed to ${status}`,
       status: status,
       date: new Date()
     });
-    
+
     await task.save();
-    
+
     // Trigger Ably event for admin
     ably.channels.get("admin-channel").publish("task_updated", {
       message: `Task ${status} by partner`,
@@ -597,7 +597,7 @@ exports.updateTaskStatus = async (req, res) => {
       taskId: task._id,
       status: status
     });
-    
+
     res.json({
       success: true,
       message: `Task ${partnerAction}ed successfully`,
@@ -620,8 +620,8 @@ exports.startService = async (req, res) => {
     const partnerId = req.user.id;
 
     // Find the task assigned to this partner
-    const task = await Cart.findOne({ 
-      _id: taskId, 
+    const task = await Cart.findOne({
+      _id: taskId,
       assignedPartner: partnerId,
       status: 'inProgress'
     }).populate('userId', 'email firstName lastName');
@@ -641,7 +641,7 @@ exports.startService = async (req, res) => {
     task.serviceOtp = otp;
     task.serviceOtpExpiry = otpExpiry;
     task.otpVerified = false;
-    
+
     await task.save();
 
     // TODO: Send OTP to user's phone via SMS service
@@ -675,8 +675,8 @@ exports.verifyServiceOtp = async (req, res) => {
     const partnerId = req.user.id;
 
     // Find the task
-    const task = await Cart.findOne({ 
-      _id: taskId, 
+    const task = await Cart.findOne({
+      _id: taskId,
       assignedPartner: partnerId,
       status: 'inProgress'
     });
@@ -715,7 +715,7 @@ exports.verifyServiceOtp = async (req, res) => {
     task.otpVerified = true;
     task.serviceOtp = undefined; // Clear OTP after verification
     task.serviceOtpExpiry = undefined;
-    
+
     // Add tracking entry
     task.tracking.push({
       message: 'Service started after OTP verification',
@@ -747,8 +747,8 @@ exports.completeService = async (req, res) => {
     const partnerId = req.user.id;
 
     // Find the task
-    const task = await Cart.findOne({ 
-      _id: taskId, 
+    const task = await Cart.findOne({
+      _id: taskId,
       assignedPartner: partnerId,
       status: 'inProgress'
     });
@@ -828,8 +828,8 @@ exports.updateServiceStatus = async (req, res) => {
       });
     }
 
-    const task = await Cart.findOne({ 
-      _id: taskId, 
+    const task = await Cart.findOne({
+      _id: taskId,
       assignedPartner: partnerId
     });
 
@@ -908,7 +908,7 @@ exports.softDeletePartner = async (req, res) => {
     partner.isDeleted = true;
     partner.deletedAt = new Date();
     partner.deletedBy = deletedBy || "Admin";
-    
+
     await partner.save();
 
     res.status(200).send({
@@ -965,5 +965,91 @@ exports.restorePartner = async (req, res) => {
     });
   } catch (err) {
     res.status(500).send({ statusCode: 500, message: err.message });
+  }
+};
+
+
+exports.uploadServiceImages = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { type } = req.body;
+    const partnerId = req.user.id;
+    const files = req.files;
+
+    // 1. Validate inputs
+    if (!taskId) {
+      return res.status(400).json({ success: false, message: 'Task ID is required' });
+    }
+
+    if (!type || !['preService', 'postService'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'Invalid upload type' });
+    }
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No images provided' });
+    }
+
+    if (files.length > 10) {
+      return res.status(400).json({ success: false, message: 'Maximum 10 images allowed' });
+    }
+
+    // Check file sizes individually (though multer might catch total size)
+    for (const file of files) {
+      if (file.size > 5 * 1024 * 1024) {
+        return res.status(400).json({ success: false, message: `File ${file.originalname} exceeds 5MB limit` });
+      }
+      if (!file.mimetype.startsWith('image/')) {
+        return res.status(400).json({ success: false, message: `File ${file.originalname} is not an image` });
+      }
+    }
+
+    // 2. Find Task and verify assignment
+    const task = await Cart.findOne({
+      _id: taskId,
+      assignedPartner: partnerId
+    });
+
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found or not assigned to you' });
+    }
+
+    // 3. Upload images
+    const folderName = `tasks/${taskId}/${type}`;
+    const imageUrls = await uploadMultipleImagesToS3(files, folderName);
+
+    // 4. Update Task in DB
+    if (!task.serviceImages) {
+      task.serviceImages = { preService: [], postService: [] };
+    }
+
+    // Initialize if undefined (handling migration case for existing docs)
+    if (!task.serviceImages.preService) task.serviceImages.preService = [];
+    if (!task.serviceImages.postService) task.serviceImages.postService = [];
+
+    if (type === 'preService') {
+      task.serviceImages.preService.push(...imageUrls);
+    } else {
+      task.serviceImages.postService.push(...imageUrls);
+    }
+
+    await task.save();
+
+    // 5. Response
+    res.status(200).json({
+      success: true,
+      message: 'Images uploaded successfully',
+      data: {
+        uploadedImages: imageUrls,
+        allImages: task.serviceImages[type]
+      }
+    });
+
+  } catch (error) {
+    console.error('Upload service images error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error uploading images',
+      error: error.message
+    });
   }
 };
