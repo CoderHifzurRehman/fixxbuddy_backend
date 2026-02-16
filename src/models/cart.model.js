@@ -100,6 +100,27 @@ const cartSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    // Pricing breakdown fields
+    originalServiceCost: {
+      type: Number,
+      default: 0
+    },
+    serviceLevelDiscountPercentage: {
+      type: Number,
+      default: 0
+    },
+    serviceLevelDiscountAmount: {
+      type: Number,
+      default: 0
+    },
+    couponDiscountAmount: {
+      type: Number,
+      default: 0
+    },
+    finalAmount: {
+      type: Number,
+      default: 0
+    },
     serviceImages: {
       preService: {
         type: [String],
