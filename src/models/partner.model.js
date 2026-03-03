@@ -10,13 +10,13 @@ const Counter = mongoose.model('Counter', CounterSchema);
 
 const partnerSchema = new mongoose.Schema(
   {
-    partnerId: { 
-      type: String, 
-      unique: true 
+    partnerId: {
+      type: String,
+      unique: true
     }, // e.g., "FB_0001"
     firstName: {
       type: String,
-      required: true 
+      required: true
     },
     lastName: {
       type: String,
@@ -124,6 +124,22 @@ const partnerSchema = new mongoose.Schema(
     },
     deletedBy: {
       type: String
+    },
+    termsAccepted: {
+      type: Boolean,
+      default: false
+    },
+    termsAcceptedAt: {
+      type: Date,
+      default: null
+    },
+    termsAcceptedIp: {
+      type: String,
+      default: null
+    },
+    termsAcceptedUserAgent: {
+      type: String,
+      default: null
     }
   },
   {
@@ -132,7 +148,7 @@ const partnerSchema = new mongoose.Schema(
 );
 
 
-partnerSchema.pre('save', function(next) {
+partnerSchema.pre('save', function (next) {
   this.fullName = `${this.firstName} ${this.lastName}`.trim();
   next();
 });
@@ -147,7 +163,7 @@ partnerSchema.pre("save", async function (next) {
 });
 
 // Pre-save hook for Partner
-partnerSchema.pre('save', async function(next) {
+partnerSchema.pre('save', async function (next) {
   if (!this.isNew) return next();
 
   try {

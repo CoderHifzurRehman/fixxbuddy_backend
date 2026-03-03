@@ -479,6 +479,9 @@ exports.getPartnerDashboard = async (req, res) => {
   try {
     const partnerId = req.user.id;
 
+    // Fetch partner data
+    const partner = await Partner.findById(partnerId);
+
     // Get all tasks assigned to this partner
     const tasks = await Cart.find({
       assignedPartner: partnerId
@@ -506,6 +509,7 @@ exports.getPartnerDashboard = async (req, res) => {
     res.json({
       success: true,
       partnerId: partnerId,
+      partner: partner,
       tasks: tasksWithQuotations,
       earnings,
       quotation: quotations,
@@ -613,6 +617,44 @@ exports.updateTaskStatus = async (req, res) => {
 };
 
 // Add these new methods to partner.controller.js
+
+exports.acceptTerms = async (req, res) => {
+  try {
+    // Assuming req.user contains the authenticated partner's ID
+    const partnerId = req.user._id || req.user.id;
+
+    // Capture proof data
+    const ipAddress = req.ip || req.connection.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    // Update the partner document
+    const updatedPartner = await Partner.findByIdAndUpdate(
+      partnerId,
+      {
+        $set: {
+          termsAccepted: true,
+          termsAcceptedAt: new Date(),
+          termsAcceptedIp: ipAddress,
+          termsAcceptedUserAgent: userAgent
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedPartner) {
+      return res.status(404).json({ success: false, message: 'Partner not found' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Terms and conditions accepted successfully',
+      partner: updatedPartner
+    });
+  } catch (error) {
+    console.error('Error accepting terms:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
 
 exports.startService = async (req, res) => {
   try {
