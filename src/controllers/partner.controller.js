@@ -150,6 +150,13 @@ exports.partnerLogin = async (req, res) => {
       });
     }
 
+    if (partner.isDeleted) {
+      return res.status(403).send({
+        statusCode: 403,
+        message: "Account has been deleted or deactivated.",
+      });
+    }
+
     // const isPasswordMatch = await bcrypt.compare(password, user.password);
     const isPasswordMatch = await bcrypt.compare(password, partner.password);
 
