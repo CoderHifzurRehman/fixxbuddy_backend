@@ -214,7 +214,7 @@ function otpMailTemplate(data) {
 
 // Add to your mailing functions
 function serviceStartOtpTemplate(user, otp) {
-  return `
+    return `
   <html>
   <head>
       <style>
@@ -302,4 +302,254 @@ function serviceStartOtpTemplate(user, otp) {
   </html>`;
 }
 
-module.exports = { welcomeMailTemplate, otpMailTemplate, serviceStartOtpTemplate };
+function partnerWelcomeMailTemplate(partnerData) {
+    const { name, email, password } = partnerData;
+
+    return `
+  <html>
+  <head>
+      <style>
+          body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              line-height: 1.6;
+              color: #333333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 0;
+              background-color: #f4f7f9;
+          }
+          .container {
+              margin: 20px auto;
+              background-color: #ffffff;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+          }
+          .header {
+              background-color: #2E5D9E;
+              padding: 30px 20px;
+              text-align: center;
+          }
+          .header img {
+              max-width: 180px;
+          }
+          .content {
+              padding: 40px 30px;
+          }
+          .content h2 {
+              color: #2E5D9E;
+              font-size: 24px;
+              margin-bottom: 20px;
+              text-align: center;
+          }
+          .content p {
+              font-size: 16px;
+              color: #555555;
+              margin-bottom: 20px;
+          }
+          .credentials-box {
+              background-color: #f0f7ff;
+              border-left: 4px solid #2E5D9E;
+              padding: 20px;
+              margin: 25px 0;
+              border-radius: 4px;
+          }
+          .credentials-row {
+              margin-bottom: 10px;
+              font-size: 16px;
+          }
+          .credentials-label {
+              font-weight: bold;
+              color: #333333;
+              display: inline-block;
+              width: 100px;
+          }
+          .credentials-value {
+              color: #2E5D9E;
+              font-family: monospace;
+              font-size: 18px;
+              background-color: #e6f0fa;
+              padding: 2px 8px;
+              border-radius: 4px;
+          }
+          .footer {
+              background-color: #f9fafb;
+              padding: 20px;
+              text-align: center;
+              font-size: 13px;
+              color: #888888;
+              border-top: 1px solid #eeeeee;
+          }
+          .button-container {
+              text-align: center;
+              margin: 30px 0;
+          }
+          .login-button {
+              background-color: #2E5D9E;
+              color: #ffffff;
+              padding: 12px 25px;
+              text-decoration: none;
+              border-radius: 5px;
+              font-weight: bold;
+              display: inline-block;
+          }
+      </style>
+  </head>
+  <body>
+      <div class="container">
+          <div class="header">
+              <img src="https://fixxbuddy.s3.ap-south-1.amazonaws.com/Website/Images/fixxbuddy_white_logo.png" alt="Fixxbuddy Logo">
+          </div>
+          
+          <div class="content">
+              <h2>Welcome to Fixxbuddy Partner Network!</h2>
+              <p>Dear ${name},</p>
+              <p>Congratulations and welcome aboard! We are thrilled to have you join our network of professional service providers. Your partner account has been created successfully.</p>
+              
+              <p>You can now log in to your partner dashboard using the credentials below:</p>
+              
+              <div class="credentials-box">
+                  <div class="credentials-row">
+                      <span class="credentials-label">Login ID:</span>
+                      <span class="credentials-value">${email}</span>
+                  </div>
+                  <div class="credentials-row">
+                      <span class="credentials-label">Password:</span>
+                      <span class="credentials-value">${password}</span>
+                  </div>
+              </div>
+              
+              <p>For your security, we strongly recommend do not share your login credentials with anyone.</p>
+              
+              <div class="button-container">
+                  <a href="https://partner.fixxbuddy.com" class="login-button" style="color: white;">Login to Partner Dashboard</a>
+              </div>
+              
+              <p>If you have any questions or need assistance, our support team is always here to help.</p>
+              <p>Best regards,<br>The Fixxbuddy Team</p>
+          </div>
+          
+          <div class="footer">
+              <p>© 2025 Fixxbuddy. All rights reserved.</p>
+          </div>
+      </div>
+  </body>
+  </html>`;
+}
+
+function termsAcceptedMailTemplate(partnerData) {
+    const { name, date, ipAddress } = partnerData;
+    
+    // Format date properly if it's a valid Date object, or just string fallback
+    const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    const formattedDate = date instanceof Date ? date.toLocaleDateString('en-IN', dateOptions) : date;
+
+    return `
+  <html>
+  <head>
+      <style>
+          body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              line-height: 1.6;
+              color: #333333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 0;
+              background-color: #f4f7f9;
+          }
+          .container {
+              margin: 20px auto;
+              background-color: #ffffff;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+          }
+          .header {
+              background-color: #2E5D9E;
+              padding: 30px 20px;
+              text-align: center;
+          }
+          .header img {
+              max-width: 180px;
+          }
+          .content {
+              padding: 40px 30px;
+          }
+          .content h2 {
+              color: #2E5D9E;
+              font-size: 24px;
+              margin-bottom: 20px;
+              text-align: center;
+          }
+          .content p {
+              font-size: 16px;
+              color: #555555;
+              margin-bottom: 20px;
+          }
+          .details-box {
+              background-color: #f0f7ff;
+              border-left: 4px solid #2E5D9E;
+              padding: 20px;
+              margin: 25px 0;
+              border-radius: 4px;
+          }
+          .details-row {
+              margin-bottom: 10px;
+              font-size: 15px;
+          }
+          .details-label {
+              font-weight: bold;
+              color: #333333;
+              display: inline-block;
+              width: 120px;
+          }
+          .details-value {
+              color: #555555;
+          }
+          .footer {
+              background-color: #f9fafb;
+              padding: 20px;
+              text-align: center;
+              font-size: 13px;
+              color: #888888;
+              border-top: 1px solid #eeeeee;
+          }
+      </style>
+  </head>
+  <body>
+      <div class="container">
+          <div class="header">
+              <img src="https://fixxbuddy.s3.ap-south-1.amazonaws.com/Website/Images/fixxbuddy_white_logo.png" alt="Fixxbuddy Logo">
+          </div>
+          
+          <div class="content">
+              <h2>Terms & Conditions Accepted</h2>
+              <p>Dear ${name},</p>
+              <p>This email is to confirm that you have successfully accepted the Fixxbuddy Partner Terms and Conditions during your recent login.</p>
+              
+              <div class="details-box">
+                  <div class="details-row">
+                      <span class="details-label">Date & Time:</span>
+                      <span class="details-value">${formattedDate}</span>
+                  </div>
+                  <div class="details-row">
+                      <span class="details-label">IP Address:</span>
+                      <span class="details-value">${ipAddress || 'Not recorded'}</span>
+                  </div>
+              </div>
+              
+              <p>By accepting these terms, you agree to comply with our guidelines and maintain the high standard of service expected by Fixxbuddy customers.</p>
+              
+              <p>If you did not perform this action, please contact our support team immediately to secure your account.</p>
+              <p>Best regards,<br>The Fixxbuddy Team</p>
+          </div>
+          
+          <div class="footer">
+              <p>© 2025 Fixxbuddy. All rights reserved.</p>
+          </div>
+      </div>
+  </body>
+  </html>`;
+}
+
+module.exports = { welcomeMailTemplate, otpMailTemplate, serviceStartOtpTemplate, partnerWelcomeMailTemplate, termsAcceptedMailTemplate };

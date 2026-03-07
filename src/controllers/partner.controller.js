@@ -5,7 +5,7 @@ const bcrypt = require("bcryptjs");
 const Cart = require('../models/cart.model');
 const Quotation = require('../models/quotation.model');
 const { uploadMultipleImagesToS3 } = require("../utils/uploadImages");
-const { serviceStartOtpTemplate } = require("../utils/mailingFunction");
+const { serviceStartOtpTemplate, partnerWelcomeMailTemplate, termsAcceptedMailTemplate } = require("../utils/mailingFunction");
 const ably = require("../utils/ably");
 
 const validatePasswordStrength = (password) => {
@@ -112,6 +112,19 @@ exports.partnerRegistration = async (req, res) => {
 
     // Save the new Partner to the database
     await newPartner.save();
+
+    // Send welcome email with credentials
+    try {
+      const subject = "Welcome to Fixxbuddy Partner Network";
+      const partnerDataForEmail = {
+        name: firstNameVal + (lastNameVal ? ' ' + lastNameVal : ''),
+        email: email,
+        password: password
+      };
+      await sendEmail(subject, email, partnerWelcomeMailTemplate(partnerDataForEmail));
+    } catch (emailError) {
+      console.error("Error sending welcome email to partner:", emailError);
+    }
 
     res.status(201).send({
       statusCode: 201,
@@ -643,6 +656,19 @@ exports.acceptTerms = async (req, res) => {
 
     if (!updatedPartner) {
       return res.status(404).json({ success: false, message: 'Partner not found' });
+    }
+
+    // Send terms accepted email
+    try {
+      const subject = "Terms and Conditions Accepted - Fixxbuddy";
+      const partnerDataForEmail = {
+        name: updatedPartner.firstName + (updatedPartner.lastName ? ' ' + updatedPartner.lastName : ''),
+        date: updatedPartner.termsAcceptedAt,
+        ipAddress: ipAddress
+      };
+      await sendEmail(subject, updatedPartner.email, termsAcceptedMailTemplate(partnerDataForEmail));
+    } catch (emailError) {
+      console.error("Error sending terms accepted email:", emailError);
     }
 
     return res.status(200).json({
