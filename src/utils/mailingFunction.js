@@ -103,7 +103,7 @@ function welcomeMailTemplate(data) {
         </div>
         
         <div class="footer">
-            <p>© 2025 Fixxbuddy. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} Fixxbuddy. All rights reserved.</p>
             <p>Premium Urban Services for Modern Living</p>
             <div class="social-links">
                 <a href="https://www.fixxbuddy.com/">Website</a>
@@ -201,7 +201,7 @@ function otpMailTemplate(data) {
     </div>
     
     <div class="footer">
-        <p>© 2025 Fixxbuddy. All rights reserved.</p>
+        <p>© ${new Date().getFullYear()} Fixxbuddy. All rights reserved.</p>
         <p>Providing premium urban services for modern living</p>
         <p>
             <a href="https://www.fixxbuddy.com/" style="color: #2E5D9E; text-decoration: none;">Our Website</a> | 
@@ -295,7 +295,7 @@ function serviceStartOtpTemplate(user, otp) {
       </div>
       
       <div class="footer">
-          <p>© 2025 Fixxbuddy. All rights reserved.</p>
+          <p>© ${new Date().getFullYear()} Fixxbuddy. All rights reserved.</p>
           <p>Your trusted partner for premium services</p>
       </div>
   </body>
@@ -430,7 +430,7 @@ function partnerWelcomeMailTemplate(partnerData) {
           </div>
           
           <div class="footer">
-              <p>© 2025 Fixxbuddy. All rights reserved.</p>
+              <p>© ${new Date().getFullYear()} Fixxbuddy. All rights reserved.</p>
           </div>
       </div>
   </body>
@@ -439,7 +439,7 @@ function partnerWelcomeMailTemplate(partnerData) {
 
 function termsAcceptedMailTemplate(partnerData) {
     const { name, date, ipAddress } = partnerData;
-    
+
     // Format date properly if it's a valid Date object, or just string fallback
     const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     const formattedDate = date instanceof Date ? date.toLocaleDateString('en-IN', dateOptions) : date;
@@ -545,7 +545,7 @@ function termsAcceptedMailTemplate(partnerData) {
           </div>
           
           <div class="footer">
-              <p>© 2025 Fixxbuddy. All rights reserved.</p>
+              <p>© ${new Date().getFullYear()} Fixxbuddy. All rights reserved.</p>
           </div>
       </div>
   </body>
