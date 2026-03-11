@@ -13,6 +13,17 @@ const authMiddleware = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, secret);
+    
+    // Add check to prevent deleted partners from accessing APIs
+    if (decoded.role === 'partner') {
+      const Partner = require('../models/partner.model');
+      const partner = await Partner.findById(decoded._id || decoded.id); // check either depending on how jwt encoded
+      
+      if (!partner || partner.isDeleted) {
+        return res.status(401).json({ statusCode: 401, message: "Your account has been deleted. You are logged out.", forceLogout: true });
+      }
+    }
+
     req.user = { ...decoded }; // Attach decoded user info to req.user
     next(); // Proceed to the next middleware
   } catch (err) {

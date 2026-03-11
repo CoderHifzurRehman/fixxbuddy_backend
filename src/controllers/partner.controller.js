@@ -986,6 +986,16 @@ exports.softDeletePartner = async (req, res) => {
 
     await partner.save();
 
+    // Trigger Ably event for the specific partner to force logout
+    try {
+      ably.channels.get(`partner-${partnerId}`).publish("partner_deleted", {
+        message: "Your account has been deleted by an administrator.",
+        partnerId: partnerId
+      });
+    } catch (ablyError) {
+      console.error("Failed to publish partner_deleted event:", ablyError);
+    }
+
     res.status(200).send({
       statusCode: 200,
       message: "Partner moved to recycle bin successfully",
