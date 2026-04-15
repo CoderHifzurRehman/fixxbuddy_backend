@@ -1,8 +1,12 @@
 const MainservicesCategories = require("../models/mainServicesCategories.model");
+const ApplicationType = require("../models/applicationType.model");
+const ServiceType = require("../models/serviceType.model");
 
 const {
   uploadSingleImageToS3,
   uploadMultipleImagesToS3,
+  deleteFolderFromS3,
+  extractFolderFromImageUrl
 } = require("../utils/uploadImages");
 
 exports.createMainServiceCategories = async (req, res) => {
@@ -201,6 +205,32 @@ exports.deleteMainServicesCategories = async (req, res) => {
         statusCode: 404,
         message: "Mainservice not found",
       });
+    }
+
+    if (mainservice.serviceName) {
+      const folderName = `services/mainservicesCategories/${mainservice.serviceName}`;
+      await deleteFolderFromS3(folderName);
+    }
+
+    // Cascade delete ApplicationType children
+    const appTypes = await ApplicationType.find({ mainServiceCategoriesId: mainServiceId });
+    for (const at of appTypes) {
+      if (at.serviceName) {
+        await deleteFolderFromS3(`services/applicationType/${at.serviceName}`);
+      }
+      
+      const serviceTypes = await ServiceType.find({ applicationTypeId: at._id });
+      for (const st of serviceTypes) {
+        if (st.serviceName) {
+          let stFolder;
+          if (st.serviceImage && st.serviceImage.length > 0) stFolder = extractFolderFromImageUrl(st.serviceImage[0]);
+          if (!stFolder) stFolder = `services/serviceType/${st.serviceName}`;
+          await deleteFolderFromS3(stFolder);
+        }
+        await ServiceType.deleteOne({ _id: st._id });
+      }
+
+      await ApplicationType.deleteOne({ _id: at._id });
     }
 
     // Delete the mainService

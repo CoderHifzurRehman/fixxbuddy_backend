@@ -4,7 +4,7 @@ const { generateToken } = require("../utils/jwt");
 const bcrypt = require("bcryptjs");
 const Cart = require('../models/cart.model');
 const Quotation = require('../models/quotation.model');
-const { uploadMultipleImagesToS3 } = require("../utils/uploadImages");
+const { uploadMultipleImagesToS3, deleteFolderFromS3 } = require("../utils/uploadImages");
 const { serviceStartOtpTemplate, partnerWelcomeMailTemplate, termsAcceptedMailTemplate } = require("../utils/mailingFunction");
 const ably = require("../utils/ably");
 
@@ -410,6 +410,9 @@ exports.deletePartner = async (req, res) => {
         message: "Partner not found",
       });
     }
+
+    const folderName = `partner/images/${partnerId}`;
+    await deleteFolderFromS3(folderName);
 
     // Delete the Partner
     await Partner.deleteOne({ _id: partnerId });

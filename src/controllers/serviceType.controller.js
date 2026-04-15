@@ -6,6 +6,9 @@ const Mainservices = require("../models/mainServices.model");
 const {
   uploadSingleImageToS3,
   uploadMultipleImagesToS3,
+  deleteFolderFromS3,
+  getUniqueS3FolderName,
+  extractFolderFromImageUrl
 } = require("../utils/uploadImages");
 
 exports.createServiceType = async (req, res) => {
@@ -26,8 +29,8 @@ exports.createServiceType = async (req, res) => {
     if (!files || files.length === 0) {
       return res.status(400).send({ message: "No files uploaded." });
     }
-    const folderName = `services/serviceType/${serviceName}`; // Customize the folder name if needed
-    // console.log(folderName);
+    const baseFolderName = `services/serviceType/${serviceName}`;
+    const folderName = await getUniqueS3FolderName(baseFolderName);
 
     // Handle service images
     let serviceImages = [];
@@ -91,12 +94,24 @@ exports.updateServiceType = async (req, res) => {
     let rateCardPdf = service.rateCardPdf;
 
     if (files.serviceImages) {
-      const folderName = `services/serviceType/${serviceName || service.serviceName}`;
+      let folderName;
+      if (service.serviceImage && service.serviceImage.length > 0) {
+        folderName = extractFolderFromImageUrl(service.serviceImage[0]);
+      }
+      if (!folderName) {
+        folderName = await getUniqueS3FolderName(`services/serviceType/${serviceName || service.serviceName}`);
+      }
       serviceImages = await uploadMultipleImagesToS3(files.serviceImages, folderName);
     }
 
     if (files.rateCardPdf) {
-      const folderName = `services/serviceType/${serviceName || service.serviceName}`;
+      let folderName;
+      if (service.serviceImage && service.serviceImage.length > 0) {
+        folderName = extractFolderFromImageUrl(service.serviceImage[0]);
+      }
+      if (!folderName) {
+        folderName = `services/serviceType/${serviceName || service.serviceName}`;
+      }
       rateCardPdf = await uploadSingleImageToS3(files.rateCardPdf[0], `${folderName}/rateCard`);
     }
 
@@ -250,6 +265,17 @@ exports.deleteServiceType = async (req, res) => {
         statusCode: 404,
         message: "Mainservice not found",
       });
+    }
+
+    if (mainservice.serviceName) {
+      let folderName;
+      if (mainservice.serviceImage && mainservice.serviceImage.length > 0) {
+        folderName = extractFolderFromImageUrl(mainservice.serviceImage[0]);
+      }
+      if (!folderName) {
+        folderName = `services/serviceType/${mainservice.serviceName}`;
+      }
+      await deleteFolderFromS3(folderName);
     }
 
     // Delete the mainService

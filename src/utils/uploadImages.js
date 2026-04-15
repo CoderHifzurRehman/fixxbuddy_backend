@@ -1,4 +1,4 @@
-const { S3Client, PutObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectsCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const sharp = require('sharp');
 require('dotenv').config();
 
@@ -198,3 +198,91 @@ exports.uploadMultipleImagesToS3 = async (files, folderName) => {
     throw new Error(`Error uploading images: ${error.message}`);
   }
 };
+
+// Delete an entire folder (prefix) from S3
+exports.deleteFolderFromS3 = async (folderName) => {
+  if (!folderName) return;
+  const prefix = sanitizeS3Key(folderName) + '/'; // Ensure trailing slash for folder
+
+  let isTruncated = true;
+  let cursor;
+
+  try {
+    while (isTruncated) {
+      const listCommand = new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: prefix,
+        ContinuationToken: cursor,
+      });
+
+      const listResponse = await s3.send(listCommand);
+
+      if (!listResponse.Contents || listResponse.Contents.length === 0) {
+        break; // No more objects to delete
+      }
+
+      const objectsToDelete = listResponse.Contents.map((item) => ({ Key: item.Key }));
+
+      const deleteCommand = new DeleteObjectsCommand({
+        Bucket: bucketName,
+        Delete: {
+          Objects: objectsToDelete,
+          Quiet: false,
+        },
+      });
+
+      await s3.send(deleteCommand);
+
+      isTruncated = listResponse.IsTruncated;
+      cursor = listResponse.NextContinuationToken;
+    }
+    console.log(`Successfully deleted folder prefix: ${prefix} from S3.`);
+  } catch (error) {
+    console.error(`Error deleting folder ${folderName} from S3:`, error);
+  }
+};
+
+// Function to check if a folder prefix exists (has objects) in S3
+const checkFolderExists = async (folderPrefix) => {
+  try {
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: folderPrefix,
+      MaxKeys: 1
+    });
+    const response = await s3.send(listCommand);
+    return response.Contents && response.Contents.length > 0;
+  } catch (error) {
+    console.error('Check folder exists error:', error);
+    throw error;
+  }
+};
+
+// Function to get a unique folder name by appending _1, _2 etc. if it already exists
+exports.getUniqueS3FolderName = async (baseFolderName) => {
+  const sanitizedBase = sanitizeS3Key(baseFolderName);
+  let folderName = sanitizedBase;
+  let counter = 0;
+  
+  while (await checkFolderExists(folderName + '/')) {
+    counter++;
+    folderName = `${sanitizedBase}_${counter}`;
+  }
+  
+  return folderName;
+};
+
+// Function to extract folder name from an uploaded image URL
+exports.extractFolderFromImageUrl = (imageUrl) => {
+  if (!imageUrl) return null;
+  // Format is: imagebaseurl/folderName/fileName
+  const startIdx = imageUrl.indexOf(imagebaseurl);
+  if (startIdx === -1) return null;
+  
+  const path = imageUrl.substring(startIdx + imagebaseurl.length + 1); // +1 for the slash
+  const parts = path.split('/');
+  if (parts.length <= 1) return null; // No folder
+  
+  // Remove the file name part and return the folder path
+  return parts.slice(0, -1).join('/');
+};
