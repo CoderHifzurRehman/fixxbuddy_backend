@@ -48,6 +48,10 @@ const partnerSchema = new mongoose.Schema(
     contactNumber: {
       type: String
     },
+    emergencyContactNumber: {
+      type: String,
+      match: [/^\d{10}$/, 'Please enter a valid 10-digit mobile number']
+    },
     address: {
       street: String,
       city: String,

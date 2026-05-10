@@ -278,7 +278,7 @@ const getOrdersByStatus = async (req, res) => {
 
     const orders = await Cart.find(query)
       .sort({ createdAt: -1 })
-      .populate('assignedPartner', 'name contactNumber specialization phone'); // Optional: populate partner details
+      .populate('assignedPartner', 'name contactNumber emergencyContactNumber specialization phone'); // Optional: populate partner details
 
     res.status(200).json({
       success: true,
@@ -713,7 +713,7 @@ const getUserRequests = async (req, res) => {
     const requests = await Cart.find({
       userId: userId,
     }).populate('serviceId', 'serviceName serviceCost description deliveryAddress contactNumber')
-      .populate('assignedPartner', 'fullName contactNumber email expertise');
+      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise');
 
     res.status(200).json({
       success: true,
@@ -735,7 +735,7 @@ const getOrderDetails = async (req, res) => {
   try {
     const order = await Cart.findById(req.params.orderId)
       .populate('userId', 'firstName lastName email phone address')
-      .populate('assignedPartner', 'fullName contactNumber email expertise')
+      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise')
       .populate('serviceId', 'serviceName serviceCost description');
 
     if (!order) {
@@ -791,7 +791,7 @@ const adminUpdateCartItemStatus = async (req, res) => {
       updateData,
       { new: true }
     )
-      .populate('assignedPartner', 'fullName contactNumber email expertise')
+      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise')
       .populate('serviceId', 'serviceName serviceCost description');
 
     if (!updatedItem) {

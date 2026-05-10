@@ -85,7 +85,7 @@ exports.getQuotationById = async (req, res) => {
   try {
     const { id } = req.params;
     const quotation = await Quotation.findById(id)
-      .populate('partnerId', 'firstName lastName email contactNumber')
+      .populate('partnerId', 'firstName lastName email contactNumber emergencyContactNumber')
       .populate('userId', 'firstName lastName email contactNumber')
       .populate('applicationTypeId', 'serviceName');
 
