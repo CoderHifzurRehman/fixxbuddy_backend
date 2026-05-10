@@ -422,7 +422,7 @@ function partnerWelcomeMailTemplate(partnerData) {
               <p>For your security, we strongly recommend do not share your login credentials with anyone.</p>
               
               <div class="button-container">
-                  <a href="https://partner.fixxbuddy.com" class="login-button" style="color: white;">Login to Partner Dashboard</a>
+                  <a href="https://portal.fixxbuddy.com" class="login-button" style="color: white;">Login to Partner Dashboard</a>
               </div>
               
               <p>If you have any questions or need assistance, our support team is always here to help.</p>
