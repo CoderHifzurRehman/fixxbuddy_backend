@@ -2,6 +2,7 @@ const Cart = require('../models/cart.model');
 const MainservicesCategories = require('../models/mainServicesCategories.model')
 const Application = require('../models/applicationType.model');
 const ServiceType = require('../models/serviceType.model');
+const Coupon = require('../models/coupon.model');
 const mongoose = require('mongoose');
 const ably = require('../utils/ably');
 
@@ -423,14 +424,17 @@ const updateCartItemStatus = async (req, res) => {
           }
 
           if (isApplicable) {
-            // Calculate coupon discount
-            const cDiscount = (amountAfterServiceDiscount * coupon.discountPercentage) / 100;
-            couponDiscountAmount = cDiscount;
-
+            appliedCouponCode = coupon.code;
+            // Use the proportional discount calculated by frontend
+            couponDiscountAmount = req.body.couponDiscountAmount || 0;
+            
+            // Safety caps
             if (coupon.maxDiscountAmount && couponDiscountAmount > coupon.maxDiscountAmount) {
               couponDiscountAmount = coupon.maxDiscountAmount;
             }
-            appliedCouponCode = coupon.code;
+            if (couponDiscountAmount > amountAfterServiceDiscount) {
+              couponDiscountAmount = amountAfterServiceDiscount;
+            }
           }
         }
       }

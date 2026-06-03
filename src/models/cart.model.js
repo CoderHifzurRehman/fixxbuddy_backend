@@ -117,6 +117,22 @@ const cartSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    additionalItemsCost: {
+      type: Number,
+      default: 0
+    },
+    grossTotalCost: {
+      type: Number,
+      default: 0
+    },
+    quotationCost: {
+      type: Number,
+      default: 0
+    },
+    quotationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Quotation'
+    },
     finalAmount: {
       type: Number,
       default: 0
@@ -136,6 +152,27 @@ const cartSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Method to calculate totals safely and reliably without overriding checkout discounts
+cartSchema.methods.calculateTotals = function() {
+  const baseCost = this.originalServiceCost > 0 ? this.originalServiceCost : this.serviceCost;
+  
+  // Use additionalItemsCost or quotationCost if applicable
+  const extraCost = this.additionalItemsCost || this.quotationCost || 0;
+  
+  this.grossTotalCost = baseCost + extraCost;
+  
+  // Keep the distributed checkout discounts intact
+  const discountAmt = (this.serviceLevelDiscountAmount || 0) + (this.couponDiscountAmount || 0);
+  this.discountAmount = discountAmt;
+  
+  let finalAmt = this.grossTotalCost - discountAmt;
+  if (finalAmt < 0) finalAmt = 0;
+  
+  this.finalAmount = finalAmt;
+  
+  return this.finalAmount;
+};
 
 const Cart = mongoose.model('Cart', cartSchema);
 
