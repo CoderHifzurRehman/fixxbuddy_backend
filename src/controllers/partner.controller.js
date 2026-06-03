@@ -1087,7 +1087,7 @@ exports.uploadServiceImages = async (req, res) => {
 
     // Check file sizes individually (though multer might catch total size)
     for (const file of files) {
-      if (file.size > 5 * 1024 * 1024) {
+      if (file.size > 10 * 1024 * 1024) {
         return res.status(400).json({ success: false, message: `File ${file.originalname} exceeds 5MB limit` });
       }
       if (!file.mimetype.startsWith('image/')) {
