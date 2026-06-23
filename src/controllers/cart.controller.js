@@ -780,7 +780,15 @@ const adminUpdateCartItemStatus = async (req, res) => {
     const updateData = { status };
 
     if (assignedPartner) updateData.assignedPartner = assignedPartner;
-    if (scheduledDate) updateData.scheduledDate = scheduledDate;
+    if (scheduledDate) {
+      let dateStr = scheduledDate;
+      // If it's a date-time string without a timezone offset (like from datetime-local: YYYY-MM-DDTHH:mm),
+      // append the IST offset so it is always parsed relative to Indian Standard Time (Asia/Kolkata)
+      if (typeof scheduledDate === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(scheduledDate)) {
+        dateStr = `${scheduledDate}+05:30`;
+      }
+      updateData.scheduledDate = new Date(dateStr);
+    }
     if (tracking) {
       updateData.$push = {
         tracking: {
