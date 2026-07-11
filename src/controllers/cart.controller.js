@@ -3,6 +3,9 @@ const MainservicesCategories = require('../models/mainServicesCategories.model')
 const Application = require('../models/applicationType.model');
 const ServiceType = require('../models/serviceType.model');
 const Coupon = require('../models/coupon.model');
+const Hub = require('../models/hub.model');
+const Partner = require('../models/partner.model');
+const Expertise = require('../models/expertise.model');
 const mongoose = require('mongoose');
 const ably = require('../utils/ably');
 
@@ -364,11 +367,67 @@ const updateCartItemStatus = async (req, res) => {
         return res.status(404).json({ success: false, message: 'Cart item not found' });
       }
 
+      // Check partner availability and expertise mapping
+      const pincode = deliveryAddress?.postalCode;
+      if (!pincode) {
+        return res.status(400).json({
+          success: false,
+          message: 'Pincode is required to check serviceability.'
+        });
+      }
+
+      // Step 1: Check general serviceability
+      const hubs = await Hub.find({ pincodes: pincode, isActive: true });
+      if (!hubs || hubs.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Your selected area is not serviceable.'
+        });
+      }
+      const hubNames = hubs.map(h => h.name);
+
       // 1. Fetch Service details to get current price and service-level discount
       const service = await ServiceType.findById(cartItem.serviceId);
       if (!service) {
-        // Fallback if service not found, though unlikely
-        console.warn(`Service ${cartItem.serviceId} not found for cart item ${cartItem._id}`);
+        return res.status(404).json({ success: false, message: 'Service not found' });
+      }
+
+      const appTypeId = service.applicationTypeId || cartItem.applicationId;
+      if (!appTypeId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Service category mapping is missing for this item.'
+        });
+      }
+
+      // Query expertise mapped to this applicationTypeId
+      const expertises = await Expertise.find({
+        "mappedServices.applicationTypeId": appTypeId
+      });
+      const matchingExpertiseNames = expertises.map(e => e.name);
+      if (matchingExpertiseNames.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'This service has no mapped expertise.'
+        });
+      }
+
+      // Step 2: Check if there is an active partner in those hubs with that expertise/designation
+      const availablePartner = await Partner.findOne({
+        isActive: true,
+        isDeleted: false,
+        hub: { $in: hubNames },
+        $or: [
+          { expertise: { $in: matchingExpertiseNames } },
+          { designation: { $in: matchingExpertiseNames } }
+        ]
+      });
+
+      if (!availablePartner) {
+        return res.status(400).json({
+          success: false,
+          message: 'Currently no service partner with the required expertise is available in your area.'
+        });
       }
 
       // Calculate Service Level Pricing
@@ -846,6 +905,116 @@ const adminUpdateCartItemStatus = async (req, res) => {
   }
 };
 
+const checkCartServiceability = async (req, res) => {
+  try {
+    const { pincode, categoryId } = req.query;
+
+    if (!pincode) {
+      return res.status(400).json({ success: false, message: 'Pincode is required' });
+    }
+
+    // 1. Find active hubs matching pincode
+    const hubs = await Hub.find({ pincodes: pincode, isActive: true });
+    if (!hubs || hubs.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          serviceable: false,
+          message: 'Your selected area is not serviceable.'
+        }
+      });
+    }
+    const hubNames = hubs.map(h => h.name);
+
+    // 2. Fetch user's cart items in addToCart status
+    let query = { userId: req.user.id, status: 'addToCart' };
+    if (categoryId && mongoose.isValidObjectId(categoryId)) {
+      query.mainServiceId = categoryId;
+    }
+    const cartItems = await Cart.find(query);
+
+    if (cartItems.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          serviceable: true,
+          message: 'Cart is empty'
+        }
+      });
+    }
+
+    // 3. Verify partner availability for each item
+    for (const item of cartItems) {
+      const service = await ServiceType.findById(item.serviceId);
+      if (!service) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            serviceable: false,
+            message: `Service not found: ${item.serviceName}`
+          }
+        });
+      }
+
+      const appTypeId = service.applicationTypeId || item.applicationId;
+      if (!appTypeId) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            serviceable: false,
+            message: `Service category mapping is missing for ${item.serviceName}`
+          }
+        });
+      }
+
+      const expertises = await Expertise.find({ "mappedServices.applicationTypeId": appTypeId });
+      const matchingExpertiseNames = expertises.map(e => e.name);
+      if (matchingExpertiseNames.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            serviceable: false,
+            message: `No service partner with matching expertise is available for ${item.serviceName}.`
+          }
+        });
+      }
+
+      const availablePartner = await Partner.findOne({
+        isActive: true,
+        isDeleted: false,
+        hub: { $in: hubNames },
+        $or: [
+          { expertise: { $in: matchingExpertiseNames } },
+          { designation: { $in: matchingExpertiseNames } }
+        ]
+      });
+
+      if (!availablePartner) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            serviceable: false,
+            message: `Currently no service partner with the required expertise is available in your area for ${item.serviceName}.`
+          }
+        });
+      }
+    }
+
+    // If all checks pass
+    return res.status(200).json({
+      success: true,
+      data: {
+        serviceable: true,
+        message: 'All items are serviceable'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error checking cart serviceability:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 
 module.exports = {
   addToCart,
@@ -860,4 +1029,5 @@ module.exports = {
   getUserRequests,
   getOrderDetails, // Add this new export
   adminUpdateCartItemStatus,
+  checkCartServiceability,
 };

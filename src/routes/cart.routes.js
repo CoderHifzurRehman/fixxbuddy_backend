@@ -5,6 +5,8 @@ const cartController = require('../controllers/cart.controller');
 
 // Base URL: /api/cart
 
+router.get('/check-serviceability', authMiddleware, cartController.checkCartServiceability);
+
 // Add item to cart (authenticated users only)
 router.post('/add', authMiddleware, cartController.addToCart);
 

@@ -266,6 +266,7 @@ exports.updateProfile = async (req, res) => {
       designation,
       expertise,
       hub,
+      isActive,
     } = req.body;
 
     // First get the current partner data
@@ -316,6 +317,10 @@ exports.updateProfile = async (req, res) => {
       expertise,
       hub,
     };
+
+    if (isActive !== undefined) {
+      updatedFields.isActive = isActive;
+    }
 
     // Handle address update if provided
     if (address) {
