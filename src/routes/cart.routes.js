@@ -20,6 +20,7 @@ router.get('/list-all', authMiddleware, cartController.getAllOrders);
 router.get('/orders/:status', authMiddleware, cartController.getOrdersByStatus);
 
 router.get('/order-details/:orderId', authMiddleware, cartController.getOrderDetails);
+router.get('/orders/:orderId/invoice', authMiddleware, cartController.getOrderInvoice);
 
 // Update cart item quantity (authenticated users only)
 router.put('/update/:cartItemId', authMiddleware, cartController.updateCartItem);

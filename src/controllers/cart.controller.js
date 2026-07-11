@@ -829,6 +829,50 @@ const getOrderDetails = async (req, res) => {
   }
 };
 
+const getOrderInvoice = async (req, res) => {
+  try {
+    const order = await Cart.findById(req.params.orderId)
+      .populate('userId', 'firstName lastName email addresses contactNumbers')
+      .populate('assignedPartner', 'firstName lastName contactNumber email address');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Check if the requesting user owns this order or is admin
+    if (order.userId._id.toString() !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this invoice'
+      });
+    }
+
+    if (order.status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invoice is only available for completed orders'
+      });
+    }
+
+    const { generateInvoice } = require('../utils/invoiceGenerator');
+    const doc = generateInvoice(order);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Invoice_${order.orderId || order._id}.pdf`);
+
+    doc.pipe(res);
+  } catch (error) {
+    console.error('Error generating invoice PDF:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while generating invoice PDF'
+    });
+  }
+};
+
 // @desc    Update cart item status (Admin version)
 // @route   PUT /api/cart/admin/update-status/:cartItemId
 // @access  Private/Admin
@@ -1028,6 +1072,7 @@ module.exports = {
   getAllUsersDetails,
   getUserRequests,
   getOrderDetails, // Add this new export
+  getOrderInvoice,
   adminUpdateCartItemStatus,
   checkCartServiceability,
 };
