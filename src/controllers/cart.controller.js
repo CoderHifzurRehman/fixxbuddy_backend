@@ -833,7 +833,7 @@ const getOrderInvoice = async (req, res) => {
   try {
     const order = await Cart.findById(req.params.orderId)
       .populate('userId', 'firstName lastName email addresses contactNumbers')
-      .populate('assignedPartner', 'firstName lastName contactNumber email address');
+      .populate('assignedPartner', 'firstName lastName contactNumber email address gstin gstNumber GSTIN');
 
     if (!order) {
       return res.status(404).json({
@@ -858,7 +858,7 @@ const getOrderInvoice = async (req, res) => {
     }
 
     const { generateInvoice } = require('../utils/invoiceGenerator');
-    const doc = generateInvoice(order);
+    const doc = await generateInvoice(order);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=Invoice_${order.orderId || order._id}.pdf`);

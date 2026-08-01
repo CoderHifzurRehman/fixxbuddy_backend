@@ -1,4 +1,20 @@
 const PDFDocument = require('pdfkit');
+const axios = require('axios');
+
+let cachedLogoBuffer = null;
+
+async function getLogoBuffer() {
+  if (cachedLogoBuffer) return cachedLogoBuffer;
+  try {
+    const url = 'https://fixxbuddy.s3.ap-south-1.amazonaws.com/Website/Images/fixxbuddy_black_logo.png';
+    const response = await axios.get(url, { responseType: 'arraybuffer' });
+    cachedLogoBuffer = Buffer.from(response.data);
+    return cachedLogoBuffer;
+  } catch (error) {
+    console.error('Failed to fetch invoice logo from S3, falling back to text:', error);
+    return null;
+  }
+}
 
 /**
  * Format a number as currency (Rs. XX.XX)
@@ -21,44 +37,53 @@ function writeDetailRow(doc, label, value, y, leftAlignX = 50, rightAlignX = 220
  * @param {Object} order - The cart/order database object populated with user and partner details
  * @returns {PDFDocument} - pdfkit PDF document stream
  */
-function generateInvoice(order) {
+async function generateInvoice(order) {
   const doc = new PDFDocument({ margin: 50, size: 'A4' });
+  const logoBuffer = await getLogoBuffer();
 
   // Extracted details
   const customerName = order.userId ? `${order.userId.firstName || ''} ${order.userId.lastName || ''}`.trim() : 'Customer';
-  const deliveryAddress = order.deliveryAddress 
+  const deliveryAddress = order.deliveryAddress
     ? `${order.deliveryAddress.street || ''}, ${order.deliveryAddress.city || ''}, ${order.deliveryAddress.state || ''} - ${order.deliveryAddress.postalCode || ''}`.trim()
     : 'No delivery address provided';
   const stateCode = order.deliveryAddress ? `${order.deliveryAddress.state || ''}`.trim() : 'N/A';
   const contactNumber = order.contactNumber ? order.contactNumber.number : 'N/A';
-  
+
   const partnerName = order.assignedPartner ? `${order.assignedPartner.firstName || ''} ${order.assignedPartner.lastName || ''}`.trim() : 'Partner';
   const partnerContact = order.assignedPartner ? order.assignedPartner.contactNumber : 'N/A';
-  const partnerAddress = order.assignedPartner && order.assignedPartner.address 
-    ? `${order.assignedPartner.address.street || ''}, ${order.assignedPartner.address.city || ''}, ${order.assignedPartner.address.state || ''} - ${order.assignedPartner.address.pincode || ''}`.trim()
-    : 'Partner Address';
   
-  const invoiceDateStr = order.completedAt 
+  let partnerAddress = 'Not Available';
+  if (order.assignedPartner && order.assignedPartner.address) {
+    const addr = order.assignedPartner.address;
+    const parts = [addr.street, addr.city, addr.state, addr.pincode].map(p => (p || '').trim()).filter(Boolean);
+    if (parts.length > 0) {
+      partnerAddress = parts.join(', ').trim();
+    }
+  }
+
+  const partnerGSTIN = (order.assignedPartner && (order.assignedPartner.gstin || order.assignedPartner.gstNumber || order.assignedPartner.GSTIN)) || 'Not Available';
+
+  const invoiceDateStr = order.completedAt
     ? new Date(order.completedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   // ----------------------------------------------------
   // PAGE 1: Fixxbuddy Platform & Convenience Fee (30% share)
   // ----------------------------------------------------
-  drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCode, invoiceDateStr);
+  drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCode, invoiceDateStr, logoBuffer);
 
   // ----------------------------------------------------
   // PAGE 2: Partner Service Charge Receipt (70% share)
   // ----------------------------------------------------
   doc.addPage();
-  drawPartnerReceipt(doc, order, customerName, deliveryAddress, stateCode, invoiceDateStr, partnerName, partnerAddress);
+  drawPartnerReceipt(doc, order, customerName, deliveryAddress, stateCode, invoiceDateStr, partnerName, partnerAddress, partnerGSTIN, logoBuffer);
 
   // ----------------------------------------------------
   // PAGE 3: Material Cost (if any)
   // ----------------------------------------------------
   if (order.additionalItemsCost && order.additionalItemsCost > 0) {
     doc.addPage();
-    drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceDateStr, partnerName, partnerAddress);
+    drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceDateStr, partnerName, partnerAddress, partnerGSTIN, logoBuffer);
   }
 
   doc.end();
@@ -68,12 +93,21 @@ function generateInvoice(order) {
 /**
  * Draws the Fixxbuddy Invoice (Platform and Convenience Fee)
  */
-function drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCode, invoiceDateStr) {
+function drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCode, invoiceDateStr, logoBuffer) {
   // Brand Header
-  doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
-  doc.fontSize(8).font('Helvetica').fillColor('#6b7280').text('Fixxbuddy Technologies Private Limited', 50, 72);
-  doc.text('Plot No. 45, Sector 18, Udyog Vihar, Gurugram, Haryana - 122015', 50, 84);
-  doc.text('GSTIN: 06AAKCF9988D1ZP', 50, 96);
+  if (logoBuffer) {
+    try {
+      doc.image(logoBuffer, 50, 48, { fit: [110, 20] });
+    } catch (err) {
+      console.error('Error rendering logo image in PDF, falling back to text:', err);
+      doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
+    }
+  } else {
+    doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
+  }
+  doc.fontSize(8).font('Helvetica').fillColor('#6b7280');
+  doc.text('Jasola okhla south delhi 110025', 50, 72);
+  doc.text('GSTIN: 07AAKFF8559R1ZC', 50, 84);
 
   doc.fontSize(14).font('Helvetica-Bold').fillColor('#1f2937').text('ORIGINAL TAX INVOICE', 350, 50, { align: 'right' });
 
@@ -98,12 +132,12 @@ function drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCo
 
   // Right Column: Service Provider details
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937').text('DELIVERY SERVICE PROVIDER', 320, 130);
-  
+
   doc.font('Helvetica-Bold').text('Business GSTIN', 320, 160);
-  doc.font('Helvetica').fillColor('#4b5563').text('06AAKCF9988D1ZP', 320, 175);
+  doc.font('Helvetica').fillColor('#4b5563').text('07AAKFF8559R1ZC', 320, 175);
 
   doc.font('Helvetica-Bold').fillColor('#1f2937').text('Business Name', 320, 205);
-  doc.font('Helvetica').fillColor('#4b5563').text('Fixxbuddy Technologies India Pvt. Ltd.', 320, 220);
+  doc.font('Helvetica').fillColor('#4b5563').text('Fixxbuddy', 320, 220);
 
   doc.font('Helvetica-Bold').fillColor('#1f2937').text('Address', 320, 250);
   doc.font('Helvetica').fillColor('#4b5563').text('Plot No. 45, Sector 18, Udyog Vihar, Gurugram, Haryana - 122015', 320, 265, { width: 225 });
@@ -156,18 +190,28 @@ function drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCo
   // Signature Block at bottom
   doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 680).lineTo(545, 680).stroke();
   doc.fontSize(8).font('Helvetica').fillColor('#9ca3af').text('*Reverse Charge mechanism not applicable', 50, 695);
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937').text('Fixxbuddy Technologies', 400, 695, { align: 'right', width: 145 });
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937').text('Fixxbuddy', 400, 695, { align: 'right', width: 145 });
   doc.fontSize(8).font('Helvetica').fillColor('#6b7280').text('Authorized Signatory', 400, 710, { align: 'right', width: 145 });
 }
 
 /**
  * Draws the Partner Service Charge Receipt (70% share)
  */
-function drawPartnerReceipt(doc, order, customerName, deliveryAddress, stateCode, invoiceDateStr, partnerName, partnerAddress) {
+function drawPartnerReceipt(doc, order, customerName, deliveryAddress, stateCode, invoiceDateStr, partnerName, partnerAddress, partnerGSTIN, logoBuffer) {
   // Brand Header
-  doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
+  // doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
+  if (logoBuffer) {
+    try {
+      doc.image(logoBuffer, 50, 48, { fit: [110, 20] });
+    } catch (err) {
+      console.error('Error rendering logo image in PDF, falling back to text:', err);
+      doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
+    }
+  } else {
+    doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
+  }
   doc.fontSize(8).font('Helvetica').fillColor('#6b7280').text('R-5, PNR House, Green Park Market, New Delhi, Delhi 110016', 50, 72);
-  
+
   doc.fontSize(14).font('Helvetica-Bold').fillColor('#1f2937').text('RECEIPT (PARTNER RECEIPT)', 300, 50, { align: 'right', width: 245 });
 
   doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 115).lineTo(545, 115).stroke();
@@ -190,14 +234,17 @@ function drawPartnerReceipt(doc, order, customerName, deliveryAddress, stateCode
 
   // Right Column: Delivery Service Provider details (Partner info)
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937').text('DELIVERY SERVICE PROVIDER', 320, 130);
-  
-  doc.font('Helvetica-Bold').text('Business Name (Partner)', 320, 160);
-  doc.font('Helvetica').fillColor('#4b5563').text(partnerName, 320, 175);
 
-  doc.font('Helvetica-Bold').fillColor('#1f2937').text('Address', 320, 205);
-  doc.font('Helvetica').fillColor('#4b5563').text(partnerAddress, 320, 220, { width: 225 });
+  doc.font('Helvetica-Bold').text('Business GSTIN', 320, 160);
+  doc.font('Helvetica').fillColor('#4b5563').text(partnerGSTIN, 320, 175);
 
-  doc.font('Helvetica-Bold').fillColor('#1f2937').text('State Name & Code', 320, 290);
+  doc.font('Helvetica-Bold').fillColor('#1f2937').text('Business Name (Partner)', 320, 205);
+  doc.font('Helvetica').fillColor('#4b5563').text(partnerName, 320, 220);
+
+  doc.font('Helvetica-Bold').fillColor('#1f2937').text('Address', 320, 250);
+  doc.font('Helvetica').fillColor('#4b5563').text(partnerAddress, 320, 265, { width: 225 });
+
+  doc.font('Helvetica-Bold').fillColor('#1f2937').text('State Name & Code', 320, 320);
   doc.font('Helvetica').fillColor('#4b5563').text(stateCode, 320, 305);
 
   doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 380).lineTo(545, 380).stroke();
@@ -240,10 +287,20 @@ function drawPartnerReceipt(doc, order, customerName, deliveryAddress, stateCode
 /**
  * Draws the Material Receipt on behalf of service professional (100% parts cost)
  */
-function drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceDateStr, partnerName, partnerAddress) {
+function drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceDateStr, partnerName, partnerAddress, partnerGSTIN, logoBuffer) {
   // Brand Header
-  doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
-  
+  // doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
+  if (logoBuffer) {
+    try {
+      doc.image(logoBuffer, 50, 48, { fit: [110, 20] });
+    } catch (err) {
+      console.error('Error rendering logo image in PDF, falling back to text:', err);
+      doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
+    }
+  } else {
+    doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
+  }
+
   doc.fontSize(14).font('Helvetica-Bold').fillColor('#1f2937').text('PAYMENT RECEIPT (SPARES & MATERIAL)', 250, 50, { align: 'right', width: 295 });
 
   doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 115).lineTo(545, 115).stroke();
@@ -263,12 +320,15 @@ function drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceD
 
   // Right Column: Service Provider details (Partner info)
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937').text('DELIVERY SERVICE PROVIDER', 320, 130);
-  
-  doc.font('Helvetica-Bold').text('Business Name (Partner)', 320, 160);
-  doc.font('Helvetica').fillColor('#4b5563').text(partnerName, 320, 175);
 
-  doc.font('Helvetica-Bold').fillColor('#1f2937').text('Address', 320, 205);
-  doc.font('Helvetica').fillColor('#4b5563').text(partnerAddress, 320, 220, { width: 225 });
+  doc.font('Helvetica-Bold').text('Business GSTIN', 320, 160);
+  doc.font('Helvetica').fillColor('#4b5563').text(partnerGSTIN, 320, 175);
+
+  doc.font('Helvetica-Bold').fillColor('#1f2937').text('Business Name (Partner)', 320, 205);
+  doc.font('Helvetica').fillColor('#4b5563').text(partnerName, 320, 220);
+
+  doc.font('Helvetica-Bold').fillColor('#1f2937').text('Address', 320, 250);
+  doc.font('Helvetica').fillColor('#4b5563').text(partnerAddress, 320, 265, { width: 225 });
 
   doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 350).lineTo(545, 350).stroke();
 
