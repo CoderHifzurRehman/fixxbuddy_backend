@@ -885,7 +885,24 @@ const adminUpdateCartItemStatus = async (req, res) => {
   try {
     const { status, assignedPartner, scheduledDate, tracking } = req.body;
 
-    const updateData = { status };
+    const existingItem = await Cart.findById(req.params.cartItemId);
+    if (!existingItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cart item not found'
+      });
+    }
+
+    const targetStatus = status || existingItem.status;
+    if (assignedPartner && targetStatus === 'addToCart') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot assign a partner to a cart item. The request must be submitted or status updated first.'
+      });
+    }
+
+    const updateData = {};
+    if (status) updateData.status = status;
 
     if (assignedPartner) updateData.assignedPartner = assignedPartner;
     if (scheduledDate) {
@@ -913,13 +930,6 @@ const adminUpdateCartItemStatus = async (req, res) => {
     )
       .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise')
       .populate('serviceId', 'serviceName serviceCost description');
-
-    if (!updatedItem) {
-      return res.status(404).json({
-        success: false,
-        message: 'Cart item not found'
-      });
-    }
 
     if (assignedPartner) {
       ably.channels.get(`partner-${assignedPartner}`).publish("task_assigned", {
