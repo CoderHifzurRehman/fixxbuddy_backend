@@ -131,7 +131,7 @@ const cartSchema = new mongoose.Schema(
     },
     quotationId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Quotation'
+      ref: 'quotation'
     },
     finalAmount: {
       type: Number,

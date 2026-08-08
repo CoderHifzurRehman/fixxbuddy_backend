@@ -67,6 +67,9 @@ const quotationSchema = new mongoose.Schema(
   }
 );
 
-const Quotation = mongoose.model('quotation', quotationSchema);
+const Quotation = mongoose.models.quotation || mongoose.models.Quotation || mongoose.model('quotation', quotationSchema);
+if (!mongoose.models.Quotation) {
+  mongoose.model('Quotation', quotationSchema);
+}
 
 module.exports = Quotation;

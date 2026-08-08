@@ -67,6 +67,26 @@ async function generateInvoice(order) {
     ? new Date(order.completedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
+  // Fetch associated quotation if present and not already populated
+  let quotation = (order.quotationId && typeof order.quotationId === 'object' && order.quotationId.items) ? order.quotationId : null;
+  if (!quotation) {
+    try {
+      const Quotation = require('../models/quotation.model');
+      const query = [];
+      if (order.quotationId) query.push({ _id: order.quotationId });
+      if (order._id) query.push({ orderId: order._id.toString() });
+      if (order.orderId) query.push({ orderId: order.orderId });
+
+      if (query.length > 0) {
+        quotation = await Quotation.findOne({ $or: query, status: 'Accepted' }) || await Quotation.findOne({ $or: query });
+      }
+    } catch (qErr) {
+      console.error('Error fetching quotation for invoice:', qErr);
+    }
+  }
+
+  const additionalCost = (order.additionalItemsCost || 0) || (order.quotationCost || 0) || (quotation ? quotation.totalAmount : 0);
+
   // ----------------------------------------------------
   // PAGE 1: Fixxbuddy Platform & Convenience Fee (30% share)
   // ----------------------------------------------------
@@ -81,9 +101,9 @@ async function generateInvoice(order) {
   // ----------------------------------------------------
   // PAGE 3: Material Cost (if any)
   // ----------------------------------------------------
-  if (order.additionalItemsCost && order.additionalItemsCost > 0) {
+  if (additionalCost > 0 || (quotation && quotation.items && quotation.items.length > 0)) {
     doc.addPage();
-    drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceDateStr, partnerName, partnerAddress, partnerGSTIN, logoBuffer);
+    drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceDateStr, partnerName, partnerAddress, partnerGSTIN, logoBuffer, quotation, additionalCost);
   }
 
   doc.end();
@@ -207,7 +227,6 @@ function drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCo
  */
 function drawPartnerReceipt(doc, order, customerName, deliveryAddress, stateCode, invoiceDateStr, partnerName, partnerAddress, partnerGSTIN, logoBuffer) {
   // Brand Header
-  // doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
   if (logoBuffer) {
     try {
       doc.image(logoBuffer, 50, 48, { fit: [110, 20] });
@@ -312,9 +331,8 @@ function drawPartnerReceipt(doc, order, customerName, deliveryAddress, stateCode
 /**
  * Draws the Material Receipt on behalf of service professional (100% parts cost)
  */
-function drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceDateStr, partnerName, partnerAddress, partnerGSTIN, logoBuffer) {
+function drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceDateStr, partnerName, partnerAddress, partnerGSTIN, logoBuffer, quotation, additionalCost) {
   // Brand Header
-  // doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
   if (logoBuffer) {
     try {
       doc.image(logoBuffer, 50, 48, { fit: [110, 20] });
@@ -358,17 +376,37 @@ function drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceD
   doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 350).lineTo(545, 350).stroke();
 
   // Table Headers
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937').text('Items', 50, 370);
-  doc.text('Taxable Value', 380, 370, { align: 'right', width: 165 });
-  doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 390).lineTo(545, 390).stroke();
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937');
+  doc.text('Items', 50, 365);
+  doc.text('Qty', 280, 365, { align: 'center', width: 40 });
+  doc.text('Price', 330, 365, { align: 'right', width: 80 });
+  doc.text('Total Amount', 425, 365, { align: 'right', width: 120 });
+  doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 385).lineTo(545, 385).stroke();
 
-  // Computations
-  const materialCost = order.additionalItemsCost;
+  let currentY = 395;
+  const itemsList = (quotation && quotation.items && quotation.items.length > 0) ? quotation.items : null;
+  const materialCost = additionalCost || (order.additionalItemsCost || order.quotationCost || (quotation ? quotation.totalAmount : 0) || 0);
 
-  // Table content
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937').text(`Material/Spare Parts Cost - ${order.serviceName}`, 50, 410, { width: 260 });
+  if (itemsList && itemsList.length > 0) {
+    itemsList.forEach(item => {
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#1f2937').text(item.name || 'Spare / Service Item', 50, currentY, { width: 220 });
+      doc.font('Helvetica').fillColor('#4b5563').text(String(item.quantity || 1), 280, currentY, { align: 'center', width: 40 });
+      doc.text(formatCurrency(item.price || 0), 330, currentY, { align: 'right', width: 80 });
+      doc.text(formatCurrency(item.total || ((item.price || 0) * (item.quantity || 1))), 425, currentY, { align: 'right', width: 120 });
+      currentY += 20;
+    });
+  } else {
+    doc.fontSize(9).font('Helvetica-Bold').fillColor('#1f2937').text(`Material/Spare Parts Cost - ${order.serviceName}`, 50, currentY, { width: 220 });
+    doc.font('Helvetica').fillColor('#4b5563').text('1', 280, currentY, { align: 'center', width: 40 });
+    doc.text(formatCurrency(materialCost), 330, currentY, { align: 'right', width: 80 });
+    doc.text(formatCurrency(materialCost), 425, currentY, { align: 'right', width: 120 });
+    currentY += 20;
+  }
 
-  let currentY = 410;
+  currentY += 10;
+  doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, currentY).lineTo(545, currentY).stroke();
+  currentY += 15;
+
   doc.fontSize(9).font('Helvetica').fillColor('#4b5563');
   doc.text('Gross Amount', 320, currentY, { align: 'right', width: 100 });
   doc.text(formatCurrency(materialCost), 445, currentY, { align: 'right', width: 100 });
@@ -380,7 +418,7 @@ function drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceD
 
   doc.font('Helvetica-Bold').text('Taxable Value', 320, currentY, { align: 'right', width: 100 });
   doc.text(formatCurrency(materialCost), 445, currentY, { align: 'right', width: 100 });
-  currentY += 30;
+  currentY += 25;
 
   doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, currentY).lineTo(545, currentY).stroke();
   currentY += 10;
@@ -388,10 +426,10 @@ function drawMaterialReceipt(doc, order, customerName, deliveryAddress, invoiceD
   doc.fontSize(11).font('Helvetica-Bold').fillColor('#1f2937').text('TOTAL AMOUNT', 50, currentY);
   doc.text(formatCurrency(materialCost), 445, currentY, { align: 'right', width: 100 });
 
-  // Notes
-  doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 640).lineTo(545, 640).stroke();
-  doc.fontSize(8).font('Helvetica').fillColor('#6b7280').text('*This is not an official invoice or tax document. This is a payment receipt for monies paid by you to the professional for purchase of spares/tools/consumables basis your instructions to be used in rendering of services.', 50, 655, { width: 495 });
-  doc.text('*Please request the Service Provider for the original invoice of the materials procured on your behalf - this will be provided if available.', 50, 680, { width: 495 });
+  const footerY = Math.max(currentY + 30, 630);
+  doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, footerY).lineTo(545, footerY).stroke();
+  doc.fontSize(8).font('Helvetica').fillColor('#6b7280').text('*This is not an official invoice or tax document. This is a payment receipt for monies paid by you to the professional for purchase of spares/tools/consumables basis your instructions to be used in rendering of services.', 50, footerY + 15, { width: 495 });
+  doc.text('*Please request the Service Provider for the original invoice of the materials procured on your behalf - this will be provided if available.', 50, footerY + 40, { width: 495 });
 }
 
 module.exports = {

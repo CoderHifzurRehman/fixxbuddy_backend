@@ -831,9 +831,14 @@ const getOrderDetails = async (req, res) => {
 
 const getOrderInvoice = async (req, res) => {
   try {
-    const order = await Cart.findById(req.params.orderId)
+    const query = mongoose.isValidObjectId(req.params.orderId)
+      ? { $or: [{ _id: req.params.orderId }, { orderId: req.params.orderId }] }
+      : { orderId: req.params.orderId };
+
+    const order = await Cart.findOne(query)
       .populate('userId', 'firstName lastName email addresses contactNumbers')
-      .populate('assignedPartner', 'firstName lastName contactNumber email address gstin gstNumber GSTIN');
+      .populate('assignedPartner', 'firstName lastName contactNumber email address gstin gstNumber GSTIN')
+      .populate('quotationId');
 
     if (!order) {
       return res.status(404).json({
