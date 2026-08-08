@@ -51,7 +51,7 @@ async function generateInvoice(order) {
 
   const partnerName = order.assignedPartner ? `${order.assignedPartner.firstName || ''} ${order.assignedPartner.lastName || ''}`.trim() : 'Partner';
   const partnerContact = order.assignedPartner ? order.assignedPartner.contactNumber : 'N/A';
-  
+
   let partnerAddress = 'Not Available';
   if (order.assignedPartner && order.assignedPartner.address) {
     const addr = order.assignedPartner.address;
@@ -106,7 +106,7 @@ function drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCo
     doc.fontSize(18).font('Helvetica-Bold').fillColor('#0d9488').text('FIXXBUDDY', 50, 50);
   }
   doc.fontSize(8).font('Helvetica').fillColor('#6b7280');
-  doc.text('Jasola okhla south delhi 110025', 50, 72);
+  doc.text('Jasola Okhla, New Delhi - 110025', 50, 72);
   doc.text('GSTIN: 07AAKFF8559R1ZC', 50, 84);
 
   doc.fontSize(14).font('Helvetica-Bold').fillColor('#1f2937').text('ORIGINAL TAX INVOICE', 350, 50, { align: 'right' });
@@ -140,10 +140,10 @@ function drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCo
   doc.font('Helvetica').fillColor('#4b5563').text('Fixxbuddy', 320, 220);
 
   doc.font('Helvetica-Bold').fillColor('#1f2937').text('Address', 320, 250);
-  doc.font('Helvetica').fillColor('#4b5563').text('Plot No. 45, Sector 18, Udyog Vihar, Gurugram, Haryana - 122015', 320, 265, { width: 225 });
+  doc.font('Helvetica').fillColor('#4b5563').text('Jasola Okhla, New Delhi - 110025', 320, 265, { width: 225 });
 
   doc.font('Helvetica-Bold').fillColor('#1f2937').text('State Name & Code', 320, 320);
-  doc.font('Helvetica').fillColor('#4b5563').text('Haryana 06', 320, 335);
+  doc.font('Helvetica').fillColor('#4b5563').text('Delhi 07', 320, 335);
 
   doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 380).lineTo(545, 380).stroke();
 
@@ -156,8 +156,15 @@ function drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCo
   const gross = 0.30 * order.serviceCost;
   const discount = 0.30 * (order.discountAmount || 0);
   const netTotal = Math.max(0, gross - discount);
-  const taxableValue = netTotal / 1.18;
-  const gst = netTotal - taxableValue;
+  
+  let taxableValue, gst;
+  if (discount > 0) {
+    taxableValue = netTotal / 1.18;
+    gst = netTotal - taxableValue;
+  } else {
+    taxableValue = gross / 1.18;
+    gst = gross - taxableValue;
+  }
 
   // Table content
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937').text('Convenience and Platform Fee', 50, 440);
@@ -259,6 +266,13 @@ function drawPartnerReceipt(doc, order, customerName, deliveryAddress, stateCode
   const discount = 0.70 * (order.discountAmount || 0);
   const netTotal = Math.max(0, gross - discount);
 
+  let taxableValue;
+  if (discount > 0) {
+    taxableValue = netTotal;
+  } else {
+    taxableValue = gross;
+  }
+
   // Table content
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937').text(`Service Charges - ${order.serviceName}`, 50, 440, { width: 260 });
   doc.fontSize(8).font('Helvetica').fillColor('#6b7280').text('SAC: 998715', 50, 470);
@@ -274,7 +288,7 @@ function drawPartnerReceipt(doc, order, customerName, deliveryAddress, stateCode
   currentY += 20;
 
   doc.font('Helvetica-Bold').text('Taxable Value', 320, currentY, { align: 'right', width: 100 });
-  doc.text(formatCurrency(netTotal), 445, currentY, { align: 'right', width: 100 });
+  doc.text(formatCurrency(taxableValue), 445, currentY, { align: 'right', width: 100 });
   currentY += 30;
 
   doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, currentY).lineTo(545, currentY).stroke();
