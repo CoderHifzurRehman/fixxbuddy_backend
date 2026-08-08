@@ -156,7 +156,7 @@ function drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCo
   const gross = 0.30 * order.serviceCost;
   const discount = 0.30 * (order.discountAmount || 0);
   const netTotal = Math.max(0, gross - discount);
-  
+
   let taxableValue, gst;
   if (discount > 0) {
     taxableValue = netTotal / 1.18;
@@ -197,8 +197,9 @@ function drawFixxbuddyInvoice(doc, order, customerName, deliveryAddress, stateCo
   // Signature Block at bottom
   doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 680).lineTo(545, 680).stroke();
   doc.fontSize(8).font('Helvetica').fillColor('#9ca3af').text('*Reverse Charge mechanism not applicable', 50, 695);
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937').text('Fixxbuddy', 400, 695, { align: 'right', width: 145 });
-  doc.fontSize(8).font('Helvetica').fillColor('#6b7280').text('Authorized Signatory', 400, 710, { align: 'right', width: 145 });
+  doc.fontSize(8).font('Helvetica').fillColor('#9ca3af').text('This tax invoice is issued for technology platform facilitation provided by Fixxbuddy.', 50, 710);
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#1f2937').text('Fixxbuddy', 400, 725, { align: 'right', width: 145 });
+  doc.fontSize(8).font('Helvetica').fillColor('#6b7280').text('Authorized Signatory', 400, 740, { align: 'right', width: 145 });
 }
 
 /**
@@ -296,6 +297,16 @@ function drawPartnerReceipt(doc, order, customerName, deliveryAddress, stateCode
 
   doc.fontSize(11).font('Helvetica-Bold').fillColor('#1f2937').text('TOTAL AMOUNT', 50, currentY);
   doc.text(formatCurrency(netTotal), 445, currentY, { align: 'right', width: 100 });
+
+  // Disclaimers at bottom
+  doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(50, 610).lineTo(545, 610).stroke();
+  doc.fontSize(8).font('Helvetica-Bold').fillColor('#4b5563').text('Terms & Disclaimers:', 50, 625);
+
+  doc.font('Helvetica-Bold').fillColor('#6b7280').text('Service Provider Liability: ', 50, 640, { continued: true })
+    .font('Helvetica').fillColor('#9ca3af').text('This combined receipt is issued on behalf of the independent service professional. Fixxbuddy acts as an intermediary connector.', { width: 495 });
+
+  doc.font('Helvetica-Bold').fillColor('#6b7280').text('Material Price Transparency: ', 50, 665, { continued: true })
+    .font('Helvetica').fillColor('#9ca3af').text('Material/spare parts cost reflects monies paid directly to the partner for procurement basis company rate card/instructions.', { width: 495 });
 }
 
 /**
