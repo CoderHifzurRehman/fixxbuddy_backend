@@ -502,9 +502,13 @@ const updateCartItemStatus = async (req, res) => {
       let finalAmount = amountAfterServiceDiscount - couponDiscountAmount;
       if (finalAmount < 0) finalAmount = 0;
 
-      // Prepare update data with all pricing fields
+      const now = new Date();
+
+      // Prepare update data with all pricing fields and order creation timestamp
       updateData = {
         ...updateData,
+        createdAt: now,
+        orderedAt: now,
         deliveryAddress,
         contactNumber,
         originalServiceCost: originalCost,

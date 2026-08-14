@@ -46,6 +46,7 @@ const cartSchema = new mongoose.Schema(
     },
     assignedPartner: { type: mongoose.Schema.Types.ObjectId, ref: 'partner' },
     scheduledDate: Date,
+    orderedAt: Date,
     tracking: [{
       message: String,
       date: { type: Date, default: Date.now },

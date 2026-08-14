@@ -63,9 +63,8 @@ async function generateInvoice(order) {
 
   const partnerGSTIN = (order.assignedPartner && (order.assignedPartner.gstin || order.assignedPartner.gstNumber || order.assignedPartner.GSTIN)) || 'Not Available';
 
-  const invoiceDateStr = order.completedAt
-    ? new Date(order.completedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const { formatDateToIST } = require('./dateUtils');
+  const invoiceDateStr = formatDateToIST(order.completedAt || new Date());
 
   // Fetch associated quotation if present and not already populated
   let quotation = (order.quotationId && typeof order.quotationId === 'object' && order.quotationId.items) ? order.quotationId : null;
