@@ -1,7 +1,7 @@
 {
-    "watch": ["index.js", "routes", "controllers", "src"],
-    "ext": "js,json",
-    "ignore": ["node_modules/*"],
-    "exec": "node index.js"
-  }
+  "watch": ["index.js", "src"],
+  "ext": "js,json",
+  "ignore": ["node_modules/*"],
+  "exec": "node index.js"
+}
   

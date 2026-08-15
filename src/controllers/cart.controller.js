@@ -185,7 +185,10 @@ const getCartItems = async (req, res) => {
 // @access  Private
 const getAllOrders = async (req, res) => {
   try {
-    const orders = await Cart.find({ userId: req.user.id }).sort({ createdAt: -1 }).lean();
+    const orders = await Cart.find({ userId: req.user.id })
+      .sort({ createdAt: -1 })
+      .populate('assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic averageRating totalRatings')
+      .lean();
 
     // Fetch additional details in parallel
     const enhancedItems = await Promise.all(orders.map(async (item) => {
@@ -282,7 +285,7 @@ const getOrdersByStatus = async (req, res) => {
 
     const orders = await Cart.find(query)
       .sort({ createdAt: -1 })
-      .populate('assignedPartner', 'name contactNumber emergencyContactNumber specialization phone'); // Optional: populate partner details
+      .populate('assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic averageRating totalRatings');
 
     res.status(200).json({
       success: true,
@@ -802,7 +805,7 @@ const getOrderDetails = async (req, res) => {
   try {
     const order = await Cart.findById(req.params.orderId)
       .populate('userId', 'firstName lastName email phone address')
-      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise')
+      .populate('assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic averageRating totalRatings')
       .populate('serviceId', 'serviceName serviceCost description');
 
     if (!order) {
@@ -1079,6 +1082,126 @@ const checkCartServiceability = async (req, res) => {
 };
 
 
+// @desc    Rate partner and add optional feedback for completed order
+// @route   POST /api/cart/:cartItemId/rate
+// @access  Private
+const ratePartner = async (req, res) => {
+  try {
+    const { cartItemId } = req.params;
+    const { rating, feedback } = req.body;
+
+    const numericRating = Number(rating);
+    if (!numericRating || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rating must be a number between 1 and 5'
+      });
+    }
+
+    const userId = req.user.id || req.user._id;
+
+    // Find cart item
+    const cartItem = await Cart.findOne({
+      _id: cartItemId,
+      userId: userId
+    });
+
+    if (!cartItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order item not found'
+      });
+    }
+
+    if (cartItem.status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Rating is only allowed for completed services'
+      });
+    }
+
+    if (!cartItem.assignedPartner) {
+      return res.status(400).json({
+        success: false,
+        message: 'No partner assigned to this order'
+      });
+    }
+
+    const partnerId = cartItem.assignedPartner;
+    const partner = await Partner.findById(partnerId);
+
+    if (!partner) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assigned partner not found'
+      });
+    }
+
+    // Fetch user details for display name
+    const User = require('../models/user.model');
+    const userDoc = await User.findById(userId);
+    const userName = userDoc ? `${userDoc.firstName || ''} ${userDoc.lastName || ''}`.trim() : 'Customer';
+
+    const feedbackText = feedback ? feedback.trim() : '';
+
+    // Update cart item rating fields
+    cartItem.rating = numericRating;
+    cartItem.ratingFeedback = feedbackText;
+    cartItem.isRated = true;
+    cartItem.ratedAt = new Date();
+    await cartItem.save();
+
+    // Check if rating from this cart item already exists in partner's ratings
+    const existingRatingIndex = partner.ratings.findIndex(
+      r => r.cartId && r.cartId.toString() === cartItemId
+    );
+
+    if (existingRatingIndex >= 0) {
+      partner.ratings[existingRatingIndex].rating = numericRating;
+      partner.ratings[existingRatingIndex].feedback = feedbackText;
+      partner.ratings[existingRatingIndex].createdAt = new Date();
+    } else {
+      partner.ratings.push({
+        cartId: cartItem._id,
+        orderId: cartItem.orderId || '',
+        userId: userId,
+        userName: userName,
+        rating: numericRating,
+        feedback: feedbackText,
+        createdAt: new Date()
+      });
+    }
+
+    // Recalculate partner's averageRating and totalRatings
+    const totalCount = partner.ratings.length;
+    const sumRatings = partner.ratings.reduce((acc, curr) => acc + curr.rating, 0);
+    const avg = totalCount > 0 ? Number((sumRatings / totalCount).toFixed(1)) : 0;
+
+    partner.totalRatings = totalCount;
+    partner.averageRating = avg;
+
+    await partner.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Rating and feedback submitted successfully',
+      data: {
+        cartItem,
+        partnerAverageRating: partner.averageRating,
+        partnerTotalRatings: partner.totalRatings
+      }
+    });
+  } catch (error) {
+    console.error('Error rating partner:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while rating partner',
+      error: error.message
+    });
+  }
+};
+
+
 module.exports = {
   addToCart,
   getCartItems,
@@ -1094,4 +1217,5 @@ module.exports = {
   getOrderInvoice,
   adminUpdateCartItemStatus,
   checkCartServiceability,
+  ratePartner,
 };

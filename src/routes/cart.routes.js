@@ -28,6 +28,10 @@ router.put('/update/:cartItemId', authMiddleware, cartController.updateCartItem)
 // Update cart status item quantity (authenticated users only)
 router.put('/update-status/:cartItemId', authMiddleware, cartController.updateCartItemStatus); // Add this line
 
+// Rate partner and submit feedback (authenticated users only)
+router.post('/:cartItemId/rate', authMiddleware, cartController.ratePartner);
+router.post('/rate/:cartItemId', authMiddleware, cartController.ratePartner);
+
 
 // Remove item from cart (authenticated users only)
 router.delete('/remove/:cartItemId', authMiddleware, cartController.removeFromCart);

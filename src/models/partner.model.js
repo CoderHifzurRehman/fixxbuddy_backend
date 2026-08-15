@@ -144,7 +144,28 @@ const partnerSchema = new mongoose.Schema(
     termsAcceptedUserAgent: {
       type: String,
       default: null
-    }
+    },
+    averageRating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5
+    },
+    totalRatings: {
+      type: Number,
+      default: 0
+    },
+    ratings: [
+      {
+        cartId: { type: mongoose.Schema.Types.ObjectId, ref: 'Cart' },
+        orderId: { type: String },
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'user' },
+        userName: { type: String, default: '' },
+        rating: { type: Number, required: true, min: 1, max: 5 },
+        feedback: { type: String, default: '' },
+        createdAt: { type: Date, default: Date.now }
+      }
+    ]
   },
   {
     timestamps: true,

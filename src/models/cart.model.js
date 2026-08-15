@@ -147,6 +147,24 @@ const cartSchema = new mongoose.Schema(
         type: [String],
         default: []
       }
+    },
+    rating: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: null
+    },
+    ratingFeedback: {
+      type: String,
+      default: ""
+    },
+    isRated: {
+      type: Boolean,
+      default: false
+    },
+    ratedAt: {
+      type: Date,
+      default: null
     }
   },
   {
