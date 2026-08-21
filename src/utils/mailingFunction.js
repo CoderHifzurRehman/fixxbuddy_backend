@@ -552,4 +552,90 @@ function termsAcceptedMailTemplate(partnerData) {
   </html>`;
 }
 
-module.exports = { welcomeMailTemplate, otpMailTemplate, serviceStartOtpTemplate, partnerWelcomeMailTemplate, termsAcceptedMailTemplate };
+function forgotPasswordMailTemplate(data) {
+    const { otp } = data;
+
+    return `
+  <html>
+  <head>
+      <style>
+          body {
+              font-family: 'Arial', sans-serif;
+              line-height: 1.6;
+              color: #333333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+          }
+          .header {
+              background-color: #000000ff;
+              padding: 20px;
+              text-align: center;
+              border-radius: 5px 5px 0 0;
+          }
+          .header img {
+              max-width: 180px;
+          }
+          .content {
+              padding: 25px;
+              background-color: #ffffff;
+              border-left: 1px solid #e0e0e0;
+              border-right: 1px solid #e0e0e0;
+          }
+          .otp-code {
+              font-size: 28px;
+              font-weight: bold;
+              color: #2E5D9E;
+              text-align: center;
+              margin: 25px 0;
+              letter-spacing: 3px;
+          }
+          .footer {
+              background-color: #f5f5f5;
+              padding: 20px;
+              text-align: center;
+              font-size: 12px;
+              color: #777777;
+              border-radius: 0 0 5px 5px;
+              border-left: 1px solid #e0e0e0;
+              border-right: 1px solid #e0e0e0;
+              border-bottom: 1px solid #e0e0e0;
+          }
+          .note {
+              font-size: 12px;
+              color: #ff0000;
+              font-style: italic;
+          }
+      </style>
+  </head>
+  <body>
+      <div class="header">
+          <img src="https://fixxbuddy.s3.ap-south-1.amazonaws.com/Website/Images/fixxbuddy_white_logo.png" alt="Fixxbuddy Logo">
+      </div>
+      
+      <div class="content">
+          <h2>Password Reset Request</h2>
+          <p>Dear Customer,</p>
+          <p>We received a request to reset your password. Please use the following One-Time Password (OTP) to complete the reset process:</p>
+          
+          <div class="otp-code">${otp}</div>
+          
+          <p>This OTP is valid for <strong>10 minutes</strong> only. Please do not share this code with anyone for security reasons.</p>
+          
+          <p class="note">If you did not request a password reset, please ignore this email or contact our support team immediately.</p>
+      </div>
+      
+      <div class="footer">
+          <p>© ${new Date().getFullYear()} Fixxbuddy. All rights reserved.</p>
+          <p>Providing premium urban services for modern living</p>
+          <p>
+              <a href="https://www.fixxbuddy.com/" style="color: #2E5D9E; text-decoration: none;">Our Website</a> | 
+              <a href="https://www.fixxbuddy.com/services" style="color: #2E5D9E; text-decoration: none;">Our Services</a>
+          </p>
+      </div>
+  </body>
+  </html>`;
+}
+
+module.exports = { welcomeMailTemplate, otpMailTemplate, serviceStartOtpTemplate, partnerWelcomeMailTemplate, termsAcceptedMailTemplate, forgotPasswordMailTemplate };
+

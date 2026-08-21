@@ -14,6 +14,13 @@ router.post("/registration", upload.single('image'), userController.userRegistra
 router.post("/login", userController.userLogin);
 router.post("/verifyotp", userController.verifyOtp);
 
+// Forgot & Reset Password routes
+router.post("/forgot-password", userController.forgotPassword);
+router.post("/forgotpassword", userController.forgotPassword);
+router.post("/reset-password", userController.resetPassword);
+router.post("/resetpassword", userController.resetPassword);
+
+
 // Profile routes
 router.get("/profile", authMiddleware, userController.getUserProfile);
 router.patch("/update/profile/:id", authMiddleware, upload.single('image'), userController.updateUserProfile);

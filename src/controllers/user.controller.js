@@ -2,7 +2,7 @@ const bcrypt = require("bcryptjs");
 const { sendEmail } = require("../config/email");
 const User = require("../models/user.model");
 const { generateToken } = require("../utils/jwt");
-const { otpMailTemplate } = require("../utils/mailingFunction");
+const { otpMailTemplate, forgotPasswordMailTemplate } = require("../utils/mailingFunction");
 const {
   uploadSingleImageToS3,
   uploadMultipleImagesToS3,
@@ -614,3 +614,110 @@ exports.setPrimaryContactNumber = async (req, res) => {
     res.status(500).send({ statusCode: 500, message: errorMsg });
   }
 };
+
+// forgotPassword
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).send({
+        statusCode: 400,
+        message: "Email is required.",
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).send({
+        statusCode: 404,
+        message: "User with this email does not exist.",
+      });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000);
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.otp = otp;
+    user.otpExpiry = otpExpiry;
+    await user.save();
+
+    const subject = "Your OTP Code for Password Reset";
+    await sendEmail(subject, user.email, forgotPasswordMailTemplate(user));
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "Reset OTP code sent to your email!",
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
+// resetPassword
+exports.resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword, password } = req.body;
+    const targetPassword = newPassword || password;
+
+    if (!email || !otp || !targetPassword) {
+      return res.status(400).send({
+        statusCode: 400,
+        message: "Email, OTP, and new password are required.",
+      });
+    }
+
+    if (!validatePasswordStrength(targetPassword)) {
+      return res.status(400).send({
+        statusCode: 400,
+        message:
+          "Password must be at least 8-16 characters long and contain a mix of uppercase, lowercase, numbers, and special characters.",
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).send({
+        statusCode: 404,
+        message: "User not found.",
+      });
+    }
+
+    const currentTime = new Date();
+
+    if (user.otp !== Number(otp)) {
+      return res.status(400).send({
+        statusCode: 400,
+        message: "Invalid OTP.",
+      });
+    }
+
+    if (!user.otpExpiry || currentTime > user.otpExpiry) {
+      return res.status(400).send({
+        statusCode: 400,
+        message: "OTP has expired.",
+      });
+    }
+
+    // Update password (Mongoose pre-save hook will hash this automatically)
+    user.password = targetPassword;
+    user.otp = null;
+    user.otpExpiry = null;
+    user.isEmailVerified = true;
+
+    await user.save();
+
+    res.status(200).send({
+      statusCode: 200,
+      message: "Password reset successfully! Please log in with your new password.",
+    });
+  } catch (err) {
+    const errorMsg = err.message || "Unknown error";
+    res.status(500).send({ statusCode: 500, message: errorMsg });
+  }
+};
+
