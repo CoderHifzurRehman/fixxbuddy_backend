@@ -665,6 +665,9 @@ const getAllUsersDetails = async (req, res) => {
       userData.count++;
       userData.statuses.add(request.status);
       userData.requests.push({
+        _id: request._id,
+        orderId: request.orderId,
+        serviceName: request.serviceName,
         createdAt: request.createdAt,
         status: request.status
       });
@@ -688,7 +691,7 @@ const getAllUsersDetails = async (req, res) => {
       const searchLower = search.toLowerCase();
       usersWithCounts = usersWithCounts.filter(userData => {
         const user = userData.user;
-        return (
+        const matchesUser = (
           user.firstName?.toLowerCase().includes(searchLower) ||
           user.lastName?.toLowerCase().includes(searchLower) ||
           user.email?.toLowerCase().includes(searchLower) ||
@@ -697,6 +700,12 @@ const getAllUsersDetails = async (req, res) => {
             contact.number?.toLowerCase().includes(searchLower)
           )
         );
+        const matchesRequest = userData.requests?.some(req =>
+          req.orderId?.toLowerCase().includes(searchLower) ||
+          req._id?.toString().toLowerCase().includes(searchLower) ||
+          req.serviceName?.toLowerCase().includes(searchLower)
+        );
+        return matchesUser || matchesRequest;
       });
     }
 
