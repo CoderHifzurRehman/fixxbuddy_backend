@@ -41,6 +41,7 @@ router.get("/single/:id", partnerController.getSinglePartner);
 router.get("/", partnerController.getAllPartenrs);
 
 // ADD THESE NEW ROUTES FOR DASHBOARD
+router.get("/admin-analytics", partnerController.getAdminAnalytics);
 router.patch("/accept-terms", authMiddleware, partnerController.acceptTerms);
 router.get("/dashboard", authMiddleware, partnerController.getPartnerDashboard);
 router.patch("/tasks/:taskId/status", authMiddleware, partnerController.updateTaskStatus);

@@ -1150,3 +1150,140 @@ exports.uploadServiceImages = async (req, res) => {
     });
   }
 };
+
+// @desc    Get admin analytics, company earnings (30%) and partner earnings breakdown
+// @route   GET /api/partners/admin-analytics
+// @access  Private/Admin
+exports.getAdminAnalytics = async (req, res) => {
+  try {
+    const partners = await Partner.find({ isDeleted: { $ne: true } }).lean();
+    const orders = await Cart.find().lean();
+
+    let totalGrossRevenue = 0;
+    let totalCompletedRevenue = 0;
+    const statusCounts = {
+      all: orders.length,
+      addToCart: 0,
+      pending: 0,
+      assigned: 0,
+      inProgress: 0,
+      completed: 0,
+      cancelled: 0
+    };
+
+    const partnerStatsMap = new Map();
+
+    partners.forEach(partner => {
+      const fn = partner.firstName || '';
+      const ln = partner.lastName || '';
+      const fullName = partner.fullName || (fn || ln ? `${fn} ${ln}`.trim() : 'Partner');
+
+      partnerStatsMap.set(partner._id.toString(), {
+        partnerId: partner._id,
+        customId: partner.partnerId || 'N/A',
+        fullName: fullName,
+        email: partner.email,
+        contactNumber: partner.contactNumber,
+        designation: partner.designation || 'Technician',
+        expertise: partner.expertise || [],
+        hub: partner.hub || [],
+        profilePic: partner.profilePic,
+        isActive: partner.isActive !== false,
+        averageRating: partner.averageRating || 0,
+        totalRatings: partner.totalRatings || 0,
+        totalAssignedOrders: 0,
+        completedOrders: 0,
+        grossRevenue: 0,
+        partnerShare: 0,
+        companyShare: 0
+      });
+    });
+
+    orders.forEach(order => {
+      if (statusCounts[order.status] !== undefined) {
+        statusCounts[order.status]++;
+      }
+
+      const orderAmount = order.finalAmount !== undefined && order.finalAmount !== null
+        ? Number(order.finalAmount)
+        : Number(order.serviceCost * (order.quantity || 1)) || 0;
+
+      if (order.status !== 'cancelled') {
+        totalGrossRevenue += orderAmount;
+      }
+
+      if (order.status === 'completed') {
+        totalCompletedRevenue += orderAmount;
+      }
+
+      if (order.assignedPartner) {
+        const pIdStr = order.assignedPartner.toString();
+        if (partnerStatsMap.has(pIdStr)) {
+          const pStats = partnerStatsMap.get(pIdStr);
+          pStats.totalAssignedOrders++;
+          if (order.status === 'completed') {
+            pStats.completedOrders++;
+            pStats.grossRevenue += orderAmount;
+            pStats.partnerShare += orderAmount * 0.70;
+            pStats.companyShare += orderAmount * 0.30;
+          }
+        }
+      }
+    });
+
+    const partnerEarningsList = Array.from(partnerStatsMap.values())
+      .sort((a, b) => b.grossRevenue - a.grossRevenue);
+
+    const totalCompanyEarnings = totalCompletedRevenue * 0.30;
+    const totalPartnerPayouts = totalCompletedRevenue * 0.70;
+
+    const timelineMap = new Map();
+    orders.filter(o => o.status === 'completed').forEach(order => {
+      const date = new Date(order.createdAt || order.updatedAt || Date.now());
+      const monthYear = date.toLocaleString('default', { month: 'short', year: '2-digit' });
+      if (!timelineMap.has(monthYear)) {
+        timelineMap.set(monthYear, {
+          month: monthYear,
+          timestamp: date.getTime(),
+          grossRevenue: 0,
+          companyEarnings: 0,
+          partnerPayouts: 0,
+          completedCount: 0
+        });
+      }
+      const item = timelineMap.get(monthYear);
+      const amt = order.finalAmount !== undefined && order.finalAmount !== null ? Number(order.finalAmount) : Number(order.serviceCost) || 0;
+      item.grossRevenue += amt;
+      item.companyEarnings += amt * 0.30;
+      item.partnerPayouts += amt * 0.70;
+      item.completedCount++;
+    });
+
+    const monthlyTimeline = Array.from(timelineMap.values())
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        summary: {
+          totalGrossRevenue,
+          totalCompletedRevenue,
+          totalCompanyEarnings,
+          totalPartnerPayouts,
+          statusCounts,
+          totalPartnersCount: partners.length,
+          activePartnersCount: partners.filter(p => p.isActive !== false).length
+        },
+        partnerEarnings: partnerEarningsList,
+        monthlyTimeline
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching admin analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching admin analytics',
+      error: error.message
+    });
+  }
+};
