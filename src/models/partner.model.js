@@ -13,7 +13,7 @@ const partnerSchema = new mongoose.Schema(
     partnerId: {
       type: String,
       unique: true
-    }, // e.g., "FB_0001"
+    }, // e.g., "FBP_0001"
     firstName: {
       type: String,
       required: true
@@ -197,7 +197,7 @@ partnerSchema.pre('save', async function (next) {
       { $inc: { seq: 1 } },
       { new: true, upsert: true }
     );
-    this.partnerId = `FB_partner_${String(counter.seq).padStart(4, '0')}`;
+    this.partnerId = `FBP_${String(counter.seq).padStart(4, '0')}`;
     next();
   } catch (err) {
     next(err);
