@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 
 const secret = process.env.SECRETKEY;
 
-// Authentication Middleware - Verifies the JWT token
+// Authentication Middleware - Verifies the JWT token and normalizes canonical role
 const authMiddleware = async (req, res, next) => {
   const token = req.header("Authorization") && req.header("Authorization").replace("Bearer ", "");
 
@@ -13,19 +13,30 @@ const authMiddleware = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, secret);
+    const canonicalRole = (decoded.role || '').toUpperCase();
     
-    // Add check to prevent deleted partners from accessing APIs
-    if (decoded.role === 'partner') {
+    // Check deleted partner status for any partner-derived role
+    const partnerRoles = ['PARTNER', 'MANAGER', 'TEAM_LEADER'];
+    if (partnerRoles.includes(canonicalRole)) {
       const Partner = require('../models/partner.model');
-      const partner = await Partner.findById(decoded._id || decoded.id); // check either depending on how jwt encoded
+      const partner = await Partner.findById(decoded._id || decoded.id);
       
       if (!partner || partner.isDeleted) {
-        return res.status(401).json({ statusCode: 401, message: "Your account has been deleted. You are logged out.", forceLogout: true });
+        return res.status(401).json({ 
+          statusCode: 401, 
+          message: "Your account has been deleted or deactivated. You are logged out.", 
+          forceLogout: true 
+        });
       }
+      req.partner = partner;
     }
 
-    req.user = { ...decoded }; // Attach decoded user info to req.user
-    next(); // Proceed to the next middleware
+    req.user = { 
+      ...decoded, 
+      role: canonicalRole,
+      isAdmin: canonicalRole === 'ADMIN'
+    };
+    next();
   } catch (err) {
     if (err.name === "TokenExpiredError") {
       return res.status(401).json({ statusCode: 401, message: "Token has expired" });
@@ -34,16 +45,19 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-// Admin Authorization Middleware - Checks if the user is an admin
+// Authorization Middleware - Checks if the user's canonical uppercase role is allowed
 const authorizeRoles = (...allowedRoles) => {
+  const normalizedAllowed = allowedRoles.map(r => r.toUpperCase());
   return (req, res, next) => {
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
+    const userRole = (req.user?.role || '').toUpperCase();
+    if (!req.user || !normalizedAllowed.includes(userRole)) {
       return res.status(403).json({ 
         statusCode: 403, 
         message: `Access denied. Only ${allowedRoles.join(', ')} can access this route.` 
       });
     }
-    next(); // Proceed if the user's role is allowed
+    next();
   };
 };
+
 module.exports = { authMiddleware, authorizeRoles };

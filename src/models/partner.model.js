@@ -88,8 +88,96 @@ const partnerSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['partner', 'admin', 'subadmin'],
-      default: 'partner',
+      enum: ['ADMIN', 'SUBADMIN', 'MANAGER', 'TEAM_LEADER', 'PARTNER'],
+      default: 'PARTNER',
+      set: (val) => (val || 'PARTNER').toUpperCase(),
+      get: (val) => (val || 'PARTNER').toUpperCase()
+    },
+    // Manager-specific configuration
+    managerConfig: {
+      managedCategories: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'mainservice'
+      }],
+      managedAreas: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hub'
+      }],
+      managedTeams: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Team'
+      }],
+      status: {
+        type: String,
+        enum: ['ACTIVE', 'INACTIVE'],
+        default: 'ACTIVE'
+      },
+      assignedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'user',
+        default: null
+      },
+      assignedAt: {
+        type: Date,
+        default: null
+      }
+    },
+    // Team Leader-specific configuration
+    teamLeaderConfig: {
+      teamId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Team',
+        default: null
+      },
+      managerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'partner',
+        default: null
+      },
+      managedCategories: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'mainservice'
+      }],
+      managedAreas: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hub'
+      }],
+      status: {
+        type: String,
+        enum: ['ACTIVE', 'INACTIVE'],
+        default: 'ACTIVE'
+      },
+      assignedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'user',
+        default: null
+      },
+      assignedAt: {
+        type: Date,
+        default: null
+      }
+    },
+    // Team reference for general partner membership
+    teamId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Team',
+      default: null
+    },
+    // Operational status for Part 7 tracking and workload
+    operationalStatus: {
+      availability: {
+        type: String,
+        enum: ['AVAILABLE', 'BUSY', 'OFFLINE', 'ON_LEAVE', 'INACTIVE'],
+        default: 'AVAILABLE'
+      },
+      dailyCapacity: {
+        type: Number,
+        default: 5
+      },
+      lastStatusUpdate: {
+        type: Date,
+        default: Date.now
+      }
     },
     isActive: {
       type: Boolean,

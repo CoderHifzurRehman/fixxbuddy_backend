@@ -46,6 +46,14 @@ const cartSchema = new mongoose.Schema(
     },
     assignedPartner: { type: mongoose.Schema.Types.ObjectId, ref: 'partner' },
     scheduledDate: Date,
+    scheduledStartTime: {
+      type: String,
+      default: "" // e.g. "10:00"
+    },
+    scheduledEndTime: {
+      type: String,
+      default: "" // e.g. "11:30"
+    },
     orderedAt: Date,
     tracking: [{
       message: String,
@@ -171,6 +179,10 @@ const cartSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Helpful compound indexes for operational scheduling and conflict checking
+cartSchema.index({ assignedPartner: 1, scheduledDate: 1, status: 1 });
+cartSchema.index({ status: 1, scheduledDate: 1 });
 
 // Method to calculate totals safely and reliably without overriding checkout discounts
 cartSchema.methods.calculateTotals = function() {

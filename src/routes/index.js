@@ -1,3 +1,4 @@
+const teamManagementRoutes = require('./teamManagement.routes');
 const express = require("express");
 
 const userRoutes = require("./user.routes");
@@ -44,6 +45,7 @@ router.use('/quotation', quotationRoutes);
 router.use('/hubs', hubRoutes);
 router.use('/coupons', couponRoutes);
 router.use('/expertises', expertiseRoutes);
+router.use('/team-management', teamManagementRoutes);
 
 
 
