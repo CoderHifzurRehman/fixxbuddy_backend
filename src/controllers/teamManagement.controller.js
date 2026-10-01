@@ -208,7 +208,8 @@ exports.updateManagerScope = async (req, res) => {
  */
 exports.promotePartner = async (req, res) => {
   try {
-    const { partnerId, targetRole, config } = req.body;
+    const { partnerId, targetRole } = req.body;
+    const config = req.body.config || req.body.configuration || {};
     const adminUser = req.user;
 
     if (!partnerId || !targetRole) {
