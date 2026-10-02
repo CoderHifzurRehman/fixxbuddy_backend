@@ -910,7 +910,23 @@ const adminUpdateCartItemStatus = async (req, res) => {
       });
     }
 
-    const targetStatus = status || existingItem.status;
+    // Determine target status:
+    // When a partner is assigned, the order status must transition to 'assigned' if it was pending or cart
+    let targetStatus = status;
+    if (assignedPartner) {
+      if (!targetStatus || targetStatus === 'pending' || targetStatus === 'addToCart') {
+        targetStatus = 'assigned';
+      }
+    } else if (assignedPartner === null || assignedPartner === '') {
+      if (!targetStatus && existingItem.status === 'assigned') {
+        targetStatus = 'pending';
+      }
+    }
+
+    if (!targetStatus) {
+      targetStatus = existingItem.status;
+    }
+
     if (assignedPartner && targetStatus === 'addToCart') {
       return res.status(400).json({
         success: false,
@@ -919,9 +935,12 @@ const adminUpdateCartItemStatus = async (req, res) => {
     }
 
     const updateData = {};
-    if (status) updateData.status = status;
+    if (targetStatus) updateData.status = targetStatus;
 
-    if (assignedPartner) updateData.assignedPartner = assignedPartner;
+    if (assignedPartner !== undefined) {
+      updateData.assignedPartner = assignedPartner || null;
+    }
+
     if (scheduledDate) {
       let dateStr = scheduledDate;
       // If it's a date-time string without a timezone offset (like from datetime-local: YYYY-MM-DDTHH:mm),
@@ -931,11 +950,27 @@ const adminUpdateCartItemStatus = async (req, res) => {
       }
       updateData.scheduledDate = new Date(dateStr);
     }
+
     if (tracking) {
+      const trackingList = (Array.isArray(tracking) ? tracking : [tracking]).map(t => ({
+        ...t,
+        status: t.status || targetStatus
+      }));
       updateData.$push = {
         tracking: {
-          $each: Array.isArray(tracking) ? tracking : [tracking],
+          $each: trackingList,
           $sort: { date: -1 } // Sort tracking by date descending
+        }
+      };
+    } else if (targetStatus !== existingItem.status || (assignedPartner && assignedPartner.toString() !== existingItem.assignedPartner?.toString())) {
+      updateData.$push = {
+        tracking: {
+          $each: [{
+            message: assignedPartner ? 'Partner assigned' : `Status updated to ${targetStatus}`,
+            date: new Date(),
+            status: targetStatus
+          }],
+          $sort: { date: -1 }
         }
       };
     }
@@ -964,7 +999,7 @@ const adminUpdateCartItemStatus = async (req, res) => {
       ably.channels.get(`user-${updatedItem.userId}`).publish("order_status_updated", {
         message: "A partner has been assigned to your request",
         taskId: updatedItem._id,
-        status: "assigned"
+        status: targetStatus || "assigned"
       });
 
       sendPushToUser(updatedItem.userId, {
@@ -973,7 +1008,7 @@ const adminUpdateCartItemStatus = async (req, res) => {
         data: {
           route: "/orders",
           orderId: String(updatedItem.orderId || updatedItem._id),
-          status: "assigned"
+          status: targetStatus || "assigned"
         }
       });
     }
