@@ -8,6 +8,7 @@ const Partner = require('../models/partner.model');
 const Expertise = require('../models/expertise.model');
 const mongoose = require('mongoose');
 const ably = require('../utils/ably');
+const { sendPushToUser } = require('../utils/fcm');
 
 
 const generateOrderId = () => {
@@ -964,6 +965,16 @@ const adminUpdateCartItemStatus = async (req, res) => {
         message: "A partner has been assigned to your request",
         taskId: updatedItem._id,
         status: "assigned"
+      });
+
+      sendPushToUser(updatedItem.userId, {
+        title: "Partner Assigned! 🛠️",
+        body: "A partner has been assigned to your FixxBuddy service request.",
+        data: {
+          route: "/orders",
+          orderId: String(updatedItem.orderId || updatedItem._id),
+          status: "assigned"
+        }
       });
     }
 

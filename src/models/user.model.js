@@ -109,6 +109,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    fcmToken: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     addresses: [addressSchema],
     contactNumbers: [contactNumberSchema],
   },

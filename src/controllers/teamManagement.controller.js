@@ -7,6 +7,7 @@ const MainservicesCategories = require('../models/mainServicesCategories.model')
 const Hub = require('../models/hub.model');
 const Cart = require('../models/cart.model');
 const ably = require('../utils/ably');
+const { sendPushToUser } = require('../utils/fcm');
 
 const normalizeRole = (role) => (role || '').toUpperCase();
 
@@ -3307,6 +3308,18 @@ exports.assignJob = async (req, res) => {
           taskId: updatedRequest._id
         });
       }
+
+      if (updatedRequest.userId) {
+        sendPushToUser(updatedRequest.userId, {
+          title: "Partner Assigned! 🛠️",
+          body: `Partner ${targetPartner.fullName} has been assigned to your service request.`,
+          data: {
+            route: "/orders",
+            orderId: String(updatedRequest.orderId || updatedRequest._id),
+            status: "assigned"
+          }
+        });
+      }
     } catch (e) {
       console.warn('Real-time notify warning:', e.message);
     }
@@ -4570,6 +4583,18 @@ exports.assignJob = async (req, res) => {
           taskId: updatedRequest._id
         });
       }
+
+      if (updatedRequest.userId) {
+        sendPushToUser(updatedRequest.userId, {
+          title: "Partner Assigned! 🛠️",
+          body: `Partner ${targetPartner.fullName} has been assigned to your service request.`,
+          data: {
+            route: "/orders",
+            orderId: String(updatedRequest.orderId || updatedRequest._id),
+            status: "assigned"
+          }
+        });
+      }
     } catch (e) {
       console.warn('Real-time notify warning:', e.message);
     }
@@ -5220,6 +5245,17 @@ exports.rescheduleJob = async (req, res) => {
         ably.channels.get('admin-channel').publish('task_updated', {
           message: `Task ${updatedRequest.orderId || updatedRequest._id} rescheduled`,
           taskId: updatedRequest._id
+        });
+      }
+
+      if (request.userId || updatedRequest.userId) {
+        sendPushToUser(request.userId || updatedRequest.userId, {
+          title: "FixxBuddy Schedule Updated 🕒",
+          body: `Your service booking has been rescheduled to ${newScheduleStr}`,
+          data: {
+            route: "/orders",
+            orderId: String(updatedRequest.orderId || updatedRequest._id)
+          }
         });
       }
     } catch (e) {

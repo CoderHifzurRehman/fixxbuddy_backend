@@ -7,6 +7,7 @@ const Quotation = require('../models/quotation.model');
 const { uploadMultipleImagesToS3, deleteFolderFromS3 } = require("../utils/uploadImages");
 const { serviceStartOtpTemplate, partnerWelcomeMailTemplate, termsAcceptedMailTemplate } = require("../utils/mailingFunction");
 const ably = require("../utils/ably");
+const { sendPushToUser } = require("../utils/fcm");
 
 const validatePasswordStrength = (password) => {
   const minLength = 8;
@@ -634,6 +635,16 @@ exports.updateTaskStatus = async (req, res) => {
       status: status
     });
 
+    sendPushToUser(task.userId, {
+      title: "FixxBuddy Order Update 🔔",
+      body: `Your order status has been updated to: ${status}`,
+      data: {
+        route: "/orders",
+        orderId: String(task.orderId || task._id),
+        status: String(status)
+      }
+    });
+
     res.json({
       success: true,
       message: `Task ${partnerAction}ed successfully`,
@@ -885,6 +896,16 @@ exports.completeService = async (req, res) => {
       status: 'completed'
     });
 
+    sendPushToUser(task.userId, {
+      title: "FixxBuddy Order Completed! 🎉",
+      body: "Your service request has been completed successfully.",
+      data: {
+        route: "/orders",
+        orderId: String(task.orderId || task._id),
+        status: "completed"
+      }
+    });
+
     // TODO: Send completion notification to user
 
     res.json({
@@ -965,6 +986,16 @@ exports.updateServiceStatus = async (req, res) => {
       message: `Your task is now ${status}`,
       taskId: task._id,
       status: status
+    });
+
+    sendPushToUser(task.userId, {
+      title: "FixxBuddy Order Update 🔔",
+      body: `Your order status has been updated to: ${status}`,
+      data: {
+        route: "/orders",
+        orderId: String(task.orderId || task._id),
+        status: String(status)
+      }
     });
 
     res.json({

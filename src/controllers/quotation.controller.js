@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Quotation = require('../models/quotation.model');
 const RateCard = require('../models/rateCard.model');
 const ably = require('../utils/ably');
+const { sendPushToUser } = require('../utils/fcm');
 
 // Create a new quotation
 exports.createQuotation = async (req, res) => {
@@ -87,6 +88,16 @@ exports.createQuotation = async (req, res) => {
       message: "A new quotation has been generated for your request",
       requestId: orderId,
       quotationId: savedQuotation._id
+    });
+
+    sendPushToUser(userId, {
+      title: "New Quotation Generated! 📋",
+      body: "A new quotation is ready for your FixxBuddy service request.",
+      data: {
+        route: "/orders",
+        requestId: String(orderId),
+        quotationId: String(savedQuotation._id)
+      }
     });
 
     // Notify Admin

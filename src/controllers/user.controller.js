@@ -721,3 +721,24 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
+exports.saveFcmToken = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const { fcmToken } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    if (!fcmToken) {
+      return res.status(400).json({ success: false, message: "fcmToken is required" });
+    }
+
+    await User.findByIdAndUpdate(userId, { fcmToken });
+    return res.status(200).json({ success: true, message: "FCM token saved successfully" });
+  } catch (error) {
+    console.error("Error saving FCM token:", error);
+    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
+};
+
