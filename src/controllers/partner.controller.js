@@ -8,6 +8,7 @@ const { uploadMultipleImagesToS3, deleteFolderFromS3 } = require("../utils/uploa
 const { serviceStartOtpTemplate, partnerWelcomeMailTemplate, termsAcceptedMailTemplate } = require("../utils/mailingFunction");
 const ably = require("../utils/ably");
 const { sendPushToUser } = require("../utils/fcm");
+const { createNotification } = require("../utils/notificationService");
 
 const validatePasswordStrength = (password) => {
   const minLength = 8;

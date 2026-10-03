@@ -9,6 +9,7 @@ const mainServicesCategoriesRoutes = require("./mainServicesCategories.routes")
 const applicationTypeRoutes = require("./applicationType.routes")
 const serviceTypeRoutes = require("./serviceType.routes")
 
+const notificationRoutes = require('./notification.routes');
 const cartRoutes = require('./cart.routes');
 const rateCardRoutes = require('./rateCard.routes');
 const quotationRoutes = require('./quotation.routes');
@@ -39,6 +40,7 @@ router.use("/applicationType", applicationTypeRoutes)
 
 router.use("/serviceType", serviceTypeRoutes)
 
+router.use('/notifications', notificationRoutes);
 router.use('/cart', cartRoutes);
 router.use('/rate-cards', rateCardRoutes);
 router.use('/quotation', quotationRoutes);

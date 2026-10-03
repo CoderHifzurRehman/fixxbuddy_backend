@@ -8,6 +8,7 @@ const Hub = require('../models/hub.model');
 const Cart = require('../models/cart.model');
 const ably = require('../utils/ably');
 const { sendPushToUser } = require('../utils/fcm');
+const { createNotification } = require('../utils/notificationService');
 
 const normalizeRole = (role) => (role || '').toUpperCase();
 
@@ -3319,6 +3320,22 @@ exports.assignJob = async (req, res) => {
             status: "assigned"
           }
         });
+        createNotification({
+          userId: updatedRequest.userId,
+          title: "Partner Assigned! 🛠️",
+          message: `Partner ${targetPartner.fullName} has been assigned to your service request (${updatedRequest.serviceName || 'Order #' + (updatedRequest.orderId || '')}).`,
+          type: "partner_assigned",
+          link: `/orders?orderId=${updatedRequest.orderId || updatedRequest._id}`,
+          metadata: {
+            orderId: String(updatedRequest.orderId || updatedRequest._id),
+            orderDbId: String(updatedRequest._id),
+            partnerId: String(targetPartner._id),
+            partnerName: targetPartner.fullName,
+            partnerPhone: targetPartner.phone || '',
+            status: "assigned"
+          },
+          sendPush: false
+        }).catch(err => console.warn('Notification error:', err.message));
       }
     } catch (e) {
       console.warn('Real-time notify warning:', e.message);
@@ -4594,6 +4611,21 @@ exports.assignJob = async (req, res) => {
             status: "assigned"
           }
         });
+        createNotification({
+          userId: updatedRequest.userId,
+          title: "Partner Reassigned 🔄",
+          message: `Your service request has been reassigned to partner ${targetPartner.fullName}.`,
+          type: "partner_reassigned",
+          link: `/orders?orderId=${updatedRequest.orderId || updatedRequest._id}`,
+          metadata: {
+            orderId: String(updatedRequest.orderId || updatedRequest._id),
+            orderDbId: String(updatedRequest._id),
+            partnerId: String(targetPartner._id),
+            partnerName: targetPartner.fullName,
+            status: "assigned"
+          },
+          sendPush: false
+        }).catch(err => console.warn('Notification error:', err.message));
       }
     } catch (e) {
       console.warn('Real-time notify warning:', e.message);

@@ -3,6 +3,7 @@ const Quotation = require('../models/quotation.model');
 const RateCard = require('../models/rateCard.model');
 const ably = require('../utils/ably');
 const { sendPushToUser } = require('../utils/fcm');
+const { createNotification } = require('../utils/notificationService');
 
 // Create a new quotation
 exports.createQuotation = async (req, res) => {

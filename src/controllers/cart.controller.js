@@ -9,6 +9,7 @@ const Expertise = require('../models/expertise.model');
 const mongoose = require('mongoose');
 const ably = require('../utils/ably');
 const { sendPushToUser } = require('../utils/fcm');
+const { createNotification } = require('../utils/notificationService');
 
 
 const generateOrderId = () => {
@@ -1011,6 +1012,19 @@ const adminUpdateCartItemStatus = async (req, res) => {
           status: targetStatus || "assigned"
         }
       });
+      createNotification({
+        userId: updatedItem.userId,
+        title: "Partner Assigned! 🛠️",
+        message: `A partner has been assigned to your FixxBuddy service request (${updatedItem.serviceName || updatedItem.orderId || ''}).`,
+        type: "partner_assigned",
+        link: `/orders?orderId=${updatedItem.orderId || updatedItem._id}`,
+        metadata: {
+          orderId: String(updatedItem.orderId || updatedItem._id),
+          orderDbId: String(updatedItem._id),
+          status: targetStatus || "assigned"
+        },
+        sendPush: false
+      }).catch(err => console.warn('Notification error:', err.message));
     }
 
     res.status(200).json({
