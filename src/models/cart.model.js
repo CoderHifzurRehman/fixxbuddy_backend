@@ -131,6 +131,33 @@ const cartSchema = new mongoose.Schema(
     completedAt: {
       type: Date
     },
+    warrantyMonths: {
+      type: Number,
+      default: 3
+    },
+    warrantyExpiresAt: {
+      type: Date
+    },
+    warrantyClaim: {
+      claimed: { type: Boolean, default: false },
+      claimId: { type: String, default: "" },
+      reason: { type: String, default: "" },
+      notes: { type: String, default: "" },
+      status: {
+        type: String,
+        enum: ['none', 'pending', 'approved', 'assigned', 'inProgress', 'completed', 'rejected'],
+        default: 'none'
+      },
+      claimedAt: { type: Date },
+      assignedPartner: { type: mongoose.Schema.Types.ObjectId, ref: 'partner' },
+      scheduledDate: { type: Date },
+      scheduledStartTime: { type: String, default: "" },
+      scheduledEndTime: { type: String, default: "" },
+      scheduledSlot: { type: String, default: "" },
+      resolvedAt: { type: Date },
+      resolutionNotes: { type: String, default: "" },
+      rejectionReason: { type: String, default: "" }
+    },
     serviceNotes: {
       type: String
     },

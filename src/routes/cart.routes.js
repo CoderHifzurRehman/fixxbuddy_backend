@@ -28,7 +28,11 @@ router.put('/update/:cartItemId', authMiddleware, cartController.updateCartItem)
 // Update cart status item quantity (authenticated users only)
 router.put('/update-status/:cartItemId', authMiddleware, cartController.updateCartItemStatus);
 // Reschedule cart item slot (authenticated users only)
-router.patch('/reschedule/:cartItemId', authMiddleware, cartController.customerRescheduleSlot); // Add this line
+router.patch('/reschedule/:cartItemId', authMiddleware, cartController.customerRescheduleSlot);
+
+// Warranty claim routes
+router.post('/claim-warranty/:cartItemId', authMiddleware, cartController.customerClaimWarranty);
+router.patch('/admin/warranty-claim/:cartItemId', cartController.adminWarrantyClaimAction); // Add this line
 
 // Rate partner and submit feedback (authenticated users only)
 router.post('/:cartItemId/rate', authMiddleware, cartController.ratePartner);

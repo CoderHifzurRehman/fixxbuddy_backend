@@ -63,6 +63,11 @@ const serviceTypeSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: ''
+    },
+    warrantyMonths: {
+      type: Number,
+      default: 3,
+      min: 0
     }
   },
   {

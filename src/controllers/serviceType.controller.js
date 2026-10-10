@@ -56,7 +56,8 @@ exports.createServiceType = async (req, res) => {
       discountPercentage: discountPercentage || 0,
       discountValidUntil: discountValidUntil || null,
       discountTerms: discountTerms || '',
-      rateCardPdf: rateCardPdfUrl
+      rateCardPdf: rateCardPdfUrl,
+      warrantyMonths: req.body.warrantyMonths !== undefined ? Number(req.body.warrantyMonths) : 3
     });
 
     // Save the new user to the database
@@ -128,6 +129,9 @@ exports.updateServiceType = async (req, res) => {
     service.discountValidUntil = discountValidUntil || service.discountValidUntil;
     service.discountTerms = discountTerms || service.discountTerms;
     service.rateCardPdf = rateCardPdf;
+    if (req.body.warrantyMonths !== undefined) {
+      service.warrantyMonths = Number(req.body.warrantyMonths);
+    }
     if (isActive !== undefined) service.isActive = isActive;
 
     // Save the updated service

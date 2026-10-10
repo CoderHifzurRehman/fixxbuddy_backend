@@ -54,16 +54,9 @@ const addToCart = async (req, res) => {
       });
     }
 
+    const serviceDoc = await ServiceType.findById(serviceId);
     const cartItem = await Cart.create({
-      userId: req.user.id,
-      orderId: generateOrderId(),
-      serviceId,
-      serviceName,
-      serviceCost: Number(serviceCost), // Ensure number type
-      serviceImage,
-      mainServiceId,
-      applicationId,
-      status: 'addToCart'
+      warrantyMonths: serviceDoc?.warrantyMonths ?? 3,$1status: 'addToCart'
     });
 
     res.status(201).json({
@@ -189,7 +182,7 @@ const getAllOrders = async (req, res) => {
   try {
     const orders = await Cart.find({ userId: req.user.id })
       .sort({ createdAt: -1 })
-      .populate('assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic averageRating totalRatings')
+      .populate('assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic averageRating totalRatings').populate('warrantyClaim.assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic')
       .lean();
 
     // Fetch additional details in parallel
@@ -287,7 +280,7 @@ const getOrdersByStatus = async (req, res) => {
 
     const orders = await Cart.find(query)
       .sort({ createdAt: -1 })
-      .populate('assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic averageRating totalRatings');
+      .populate('assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic averageRating totalRatings').populate('warrantyClaim.assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic');
 
     res.status(200).json({
       success: true,
@@ -711,7 +704,11 @@ const getAllUsersDetails = async (req, res) => {
     // Base query for requests
     let requestQuery = {};
     if (status && status !== 'all') {
-      requestQuery.status = status;
+      if (status === 'warrantyClaims' || status === 'warrantyClaim') {
+        requestQuery['warrantyClaim.claimed'] = true;
+      } else {
+        requestQuery.status = status;
+      }
     }
 
     // First get all requests with user data that match the status filter
@@ -740,6 +737,9 @@ const getAllUsersDetails = async (req, res) => {
 
       const userData = usersMap.get(userId);
       userData.count++;
+      if (request.warrantyClaim?.claimed) {
+        userData.warrantyClaimsCount = (userData.warrantyClaimsCount || 0) + 1;
+      }
       userData.statuses.add(request.status);
       userData.requests.push({
         _id: request._id,
@@ -837,7 +837,9 @@ const getAllUsersDetails = async (req, res) => {
       count: userData.count,
       latestRequestDate: userData.latestRequestDate,
       earliestRequestDate: userData.earliestRequestDate,
-      statuses: Array.from(userData.statuses)
+      statuses: Array.from(userData.statuses),
+      warrantyClaimsCount: userData.warrantyClaimsCount || 0,
+      hasWarrantyClaim: (userData.warrantyClaimsCount || 0) > 0
     }));
 
     res.status(200).json({
@@ -869,7 +871,7 @@ const getUserRequests = async (req, res) => {
     const requests = await Cart.find({
       userId: userId,
     }).populate('serviceId', 'serviceName serviceCost description deliveryAddress contactNumber')
-      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise');
+      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise').populate('warrantyClaim.assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise');
 
     res.status(200).json({
       success: true,
@@ -891,7 +893,7 @@ const getOrderDetails = async (req, res) => {
   try {
     const order = await Cart.findById(req.params.orderId)
       .populate('userId', 'firstName lastName email phone address')
-      .populate('assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic averageRating totalRatings')
+      .populate('assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic averageRating totalRatings').populate('warrantyClaim.assignedPartner', 'fullName firstName lastName contactNumber emergencyContactNumber email expertise profilePic')
       .populate('serviceId', 'serviceName serviceCost description');
 
     if (!order) {
@@ -1162,7 +1164,7 @@ const adminUpdateCartItemStatus = async (req, res) => {
       updateData,
       { new: true }
     )
-      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise')
+      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise').populate('warrantyClaim.assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise')
       .populate('serviceId', 'serviceName serviceCost description');
 
     if (assignedPartner) {
@@ -1572,6 +1574,268 @@ const customerRescheduleSlot = async (req, res) => {
   }
 };
 
+
+// ==========================================
+// Warranty Claim Handlers
+// ==========================================
+
+// @desc    Customer submits a warranty claim for a completed order
+// @route   POST /api/cart/claim-warranty/:cartItemId
+// @access  Private/Customer
+const customerClaimWarranty = async (req, res) => {
+  try {
+    const { cartItemId } = req.params;
+    const { reason, notes, preferredDate, preferredSlot } = req.body;
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reason for warranty claim is required'
+      });
+    }
+
+    const cartItem = await Cart.findOne({
+      _id: cartItemId,
+      userId: req.user.id
+    });
+
+    if (!cartItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    if (cartItem.status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Warranty claims are only available for completed services'
+      });
+    }
+
+    // Check warranty expiration
+    const expiryDate = cartItem.warrantyExpiresAt || (cartItem.completedAt ? new Date(cartItem.completedAt.getTime() + (cartItem.warrantyMonths || 3) * 30 * 24 * 60 * 60 * 1000) : null);
+    if (expiryDate && new Date() > expiryDate) {
+      return res.status(400).json({
+        success: false,
+        message: `Warranty period expired on ${expiryDate.toLocaleDateString('en-IN')}. Warranty claim cannot be submitted.`
+      });
+    }
+
+    // Check if active claim is already pending/assigned/inProgress
+    if (cartItem.warrantyClaim?.claimed && ['pending', 'approved', 'assigned', 'inProgress'].includes(cartItem.warrantyClaim.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'A warranty claim is already in progress for this service booking.'
+      });
+    }
+
+    const claimId = `WC-${Date.now().toString().slice(-6)}`;
+    cartItem.warrantyClaim = {
+      claimed: true,
+      claimId,
+      reason: reason.trim(),
+      notes: notes ? notes.trim() : '',
+      status: 'pending',
+      claimedAt: new Date(),
+      scheduledDate: preferredDate ? new Date(preferredDate) : null,
+      scheduledSlot: preferredSlot || '',
+      assignedPartner: null,
+      rejectionReason: '',
+      resolutionNotes: '',
+      resolvedAt: null
+    };
+
+    const trackingMsg = `Warranty claim submitted (${claimId}): ${reason.trim()}`;
+    cartItem.tracking.unshift({
+      message: trackingMsg,
+      date: new Date(),
+      status: 'warrantyClaim'
+    });
+
+    await cartItem.save();
+
+    // Real-time notification via Ably
+    try {
+      const channel = ably.channels.get('admin-notifications');
+      channel.publish('warranty_claim_submitted', {
+        cartItemId: cartItem._id,
+        orderId: cartItem.orderId,
+        serviceName: cartItem.serviceName,
+        claimId,
+        customerName: req.user.fullName || req.user.name,
+        reason: reason.trim()
+      });
+    } catch (e) {
+      console.warn('Ably notification error (warranty claim):', e.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Warranty claim submitted successfully. Our team will review and assign a technician shortly.',
+      data: cartItem
+    });
+  } catch (error) {
+    console.error('Error submitting warranty claim:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to submit warranty claim',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Admin/Staff manage or reassign partner for warranty claim
+// @route   PATCH /api/cart/admin/warranty-claim/:cartItemId
+// @access  Private/Admin
+const adminWarrantyClaimAction = async (req, res) => {
+  try {
+    const { cartItemId } = req.params;
+    const {
+      action,
+      assignedPartner,
+      scheduledDate,
+      scheduledStartTime,
+      scheduledEndTime,
+      scheduledSlot,
+      status,
+      reason,
+      notes
+    } = req.body;
+
+    const cartItem = await Cart.findById(cartItemId)
+      .populate('userId', 'fullName firstName lastName email contactNumbers phone');
+
+    if (!cartItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service order not found'
+      });
+    }
+
+    if (!cartItem.warrantyClaim || !cartItem.warrantyClaim.claimed) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active warranty claim on this service order'
+      });
+    }
+
+    if (action === 'assign_partner' || action === 'reassign') {
+      if (!assignedPartner) {
+        return res.status(400).json({
+          success: false,
+          message: 'Partner ID is required for assignment'
+        });
+      }
+
+      const Partner = require('../models/partner.model');
+      const partnerObj = await Partner.findById(assignedPartner);
+      if (!partnerObj) {
+        return res.status(404).json({
+          success: false,
+          message: 'Partner not found'
+        });
+      }
+
+      cartItem.warrantyClaim.assignedPartner = assignedPartner;
+      cartItem.warrantyClaim.status = 'assigned';
+      if (scheduledDate) cartItem.warrantyClaim.scheduledDate = new Date(scheduledDate);
+      if (scheduledStartTime) cartItem.warrantyClaim.scheduledStartTime = scheduledStartTime;
+      if (scheduledEndTime) cartItem.warrantyClaim.scheduledEndTime = scheduledEndTime;
+      if (scheduledSlot) cartItem.warrantyClaim.scheduledSlot = scheduledSlot;
+
+      const partnerName = partnerObj.fullName || `${partnerObj.firstName || ''} ${partnerObj.lastName || ''}`.trim();
+      const dateStr = scheduledDate ? new Date(scheduledDate).toLocaleDateString('en-IN') : '';
+      const trackingMsg = `Warranty claim visit assigned to Partner ${partnerName}${dateStr ? ` for ${dateStr}` : ''}${scheduledSlot ? ` (${scheduledSlot})` : ''}`;
+
+      cartItem.tracking.unshift({
+        message: trackingMsg,
+        date: new Date(),
+        status: 'warrantyAssigned'
+      });
+
+      await cartItem.save();
+
+      // Notify partner via Ably
+      try {
+        const partnerChannel = ably.channels.get(`partner-${assignedPartner}`);
+        partnerChannel.publish('warranty_claim_assigned', {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          serviceName: cartItem.serviceName,
+          claimId: cartItem.warrantyClaim.claimId,
+          reason: cartItem.warrantyClaim.reason,
+          scheduledDate: cartItem.warrantyClaim.scheduledDate,
+          scheduledSlot: cartItem.warrantyClaim.scheduledSlot
+        });
+      } catch (e) {
+        console.warn('Ably partner notification error:', e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Partner ${partnerName} assigned for warranty claim service visit`,
+        data: cartItem
+      });
+    }
+
+    if (action === 'update_status') {
+      const validStatuses = ['approved', 'inProgress', 'completed', 'rejected'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid warranty claim status. Allowed: ${validStatuses.join(', ')}`
+        });
+      }
+
+      cartItem.warrantyClaim.status = status;
+
+      if (status === 'completed') {
+        cartItem.warrantyClaim.resolvedAt = new Date();
+        cartItem.warrantyClaim.resolutionNotes = notes || 'Warranty service issue resolved';
+        cartItem.tracking.unshift({
+          message: `Warranty claim resolved successfully: ${cartItem.warrantyClaim.resolutionNotes}`,
+          date: new Date(),
+          status: 'warrantyResolved'
+        });
+      } else if (status === 'rejected') {
+        cartItem.warrantyClaim.rejectionReason = reason || 'Warranty claim rejected by management';
+        cartItem.tracking.unshift({
+          message: `Warranty claim rejected: ${cartItem.warrantyClaim.rejectionReason}`,
+          date: new Date(),
+          status: 'warrantyRejected'
+        });
+      } else {
+        cartItem.tracking.unshift({
+          message: `Warranty claim status updated to ${status}${notes ? `: ${notes}` : ''}`,
+          date: new Date(),
+          status: `warranty_${status}`
+        });
+      }
+
+      await cartItem.save();
+
+      return res.status(200).json({
+        success: true,
+        message: `Warranty claim status updated to ${status}`,
+        data: cartItem
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid action specified. Supported actions: assign_partner, reassign, update_status'
+    });
+  } catch (error) {
+    console.error('Error managing warranty claim:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update warranty claim',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   addToCart,
   getCartItems,
@@ -1583,10 +1847,12 @@ module.exports = {
   clearCart,
   getAllUsersDetails,
   getUserRequests,
-  getOrderDetails, // Add this new export
+  getOrderDetails,
   getOrderInvoice,
   adminUpdateCartItemStatus,
   checkCartServiceability,
   ratePartner,
   customerRescheduleSlot,
+  customerClaimWarranty,
+  adminWarrantyClaimAction,
 };

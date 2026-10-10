@@ -25,6 +25,11 @@ const mainServicesSchema = new mongoose.Schema(
       type:String,
       default:"",
     },
+    warrantyMonths: {
+      type: Number,
+      default: 3,
+      min: 0
+    },
   },
   {
     timestamps: true,
