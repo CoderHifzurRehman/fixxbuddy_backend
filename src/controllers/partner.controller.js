@@ -536,7 +536,7 @@ exports.getPartnerDashboard = async (req, res) => {
     const tasksWithQuotations = tasks.map(task => {
       const taskObj = task.toObject();
       // Find quotation for this task (matching custom orderId string)
-      taskObj.quotation = quotations.find(q => q.orderId === task.orderId);
+      taskObj.quotation = quotations.find(q => (task.orderId && q.orderId === task.orderId) || (task._id && q.orderId === task._id.toString()) || (task.quotationId && q._id.toString() === task.quotationId.toString()));
       return taskObj;
     });
 
@@ -722,7 +722,7 @@ exports.startService = async (req, res) => {
     const task = await Cart.findOne({
       _id: taskId,
       assignedPartner: partnerId,
-      status: 'inProgress'
+      status: { $in: ['inProgress', 'onHold'] }
     }).populate('userId', 'email firstName lastName');
 
     if (!task) {
@@ -929,7 +929,7 @@ exports.updateServiceStatus = async (req, res) => {
     const { status, notes } = req.body;
     const partnerId = req.user.id;
 
-    const validStatuses = ['inProgress', 'completed', 'cancelled'];
+    const validStatuses = ['inProgress', 'onHold', 'completed', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -1318,4 +1318,205 @@ exports.getAdminAnalytics = async (req, res) => {
       error: error.message
     });
   }
-};
+};
+// @desc    Put service on hold / pause service
+// @route   PATCH /api/partners/tasks/:taskId/pause
+// @access  Private/Partner
+exports.pauseService = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { reason, notes } = req.body;
+    const partnerId = req.user.id;
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'A reason is required to put service on hold'
+      });
+    }
+
+    const task = await Cart.findOne({
+      _id: taskId,
+      assignedPartner: partnerId
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found or not assigned to you'
+      });
+    }
+
+    if (!task.otpVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Service must be started before it can be put on hold'
+      });
+    }
+
+    if (task.status === 'completed' || task.status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot pause a service that is ${task.status}`
+      });
+    }
+
+    task.status = 'onHold';
+    task.holdReason = reason;
+    task.holdNotes = notes || '';
+    task.holdAt = new Date();
+
+    const trackingMsg = `Service put on hold: ${reason}${notes ? ` - ${notes}` : ''}`;
+    task.tracking.push({
+      message: trackingMsg,
+      status: 'onHold',
+      date: new Date(),
+      type: 'hold'
+    });
+
+    await task.save();
+
+    // Trigger Ably event for admin
+    try {
+      ably.channels.get('admin-channel').publish('task_updated', {
+        message: `Task put on hold by partner: ${reason}`,
+        taskId: task._id,
+        status: 'onHold',
+        holdReason: reason,
+        holdNotes: notes
+      });
+    } catch (e) {
+      console.error('Ably admin error:', e);
+    }
+
+    // Notify User (Customer)
+    try {
+      ably.channels.get(`user-${task.userId}`).publish('order_status_updated', {
+        message: trackingMsg,
+        taskId: task._id,
+        status: 'onHold',
+        holdReason: reason
+      });
+    } catch (e) {
+      console.error('Ably user error:', e);
+    }
+
+    try {
+      sendPushToUser(task.userId, {
+        title: 'Service Update: Temporarily On Hold ⏸️',
+        body: `Your service is temporarily on hold: ${reason}. Work will resume shortly.`,
+        data: {
+          route: '/orders',
+          orderId: String(task.orderId || task._id),
+          status: 'onHold'
+        }
+      });
+    } catch (e) {
+      console.error('FCM error:', e);
+    }
+
+    res.json({
+      success: true,
+      message: 'Service put on hold successfully',
+      data: task
+    });
+  } catch (error) {
+    console.error('Pause service error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error putting service on hold',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Resume service from on hold
+// @route   PATCH /api/partners/tasks/:taskId/resume
+// @access  Private/Partner
+exports.resumeService = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const partnerId = req.user.id;
+
+    const task = await Cart.findOne({
+      _id: taskId,
+      assignedPartner: partnerId
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found or not assigned to you'
+      });
+    }
+
+    if (task.status !== 'onHold') {
+      return res.status(400).json({
+        success: false,
+        message: 'Service is not currently on hold'
+      });
+    }
+
+    task.status = 'inProgress';
+    task.resumedAt = new Date();
+
+    const trackingMsg = 'Service resumed by partner';
+    task.tracking.push({
+      message: trackingMsg,
+      status: 'inProgress',
+      date: new Date(),
+      type: 'resume'
+    });
+
+    await task.save();
+
+    // Trigger Ably event for admin
+    try {
+      ably.channels.get('admin-channel').publish('task_updated', {
+        message: 'Task resumed by partner',
+        taskId: task._id,
+        status: 'inProgress'
+      });
+    } catch (e) {
+      console.error('Ably admin error:', e);
+    }
+
+    // Notify User (Customer)
+    try {
+      ably.channels.get(`user-${task.userId}`).publish('order_status_updated', {
+        message: 'Your partner has resumed work on your service',
+        taskId: task._id,
+        status: 'inProgress'
+      });
+    } catch (e) {
+      console.error('Ably user error:', e);
+    }
+
+    try {
+      sendPushToUser(task.userId, {
+        title: 'Service Resumed! ▶️',
+        body: 'Your partner has resumed work on your service.',
+        data: {
+          route: '/orders',
+          orderId: String(task.orderId || task._id),
+          status: 'inProgress'
+        }
+      });
+    } catch (e) {
+      console.error('FCM error:', e);
+    }
+
+    res.json({
+      success: true,
+      message: 'Service resumed successfully',
+      data: task
+    });
+  } catch (error) {
+    console.error('Resume service error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error resuming service',
+      error: error.message
+    });
+  }
+};

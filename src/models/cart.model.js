@@ -37,8 +37,22 @@ const cartSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['addToCart', 'pending', 'assigned', 'inProgress', 'completed', 'cancelled'],
+      enum: ['addToCart', 'pending', 'assigned', 'inProgress', 'onHold', 'completed', 'cancelled'],
       default: 'addToCart'
+    },
+    holdReason: {
+      type: String,
+      default: ""
+    },
+    holdNotes: {
+      type: String,
+      default: ""
+    },
+    holdAt: {
+      type: Date
+    },
+    resumedAt: {
+      type: Date
     },
     quantity: {
       type: Number,

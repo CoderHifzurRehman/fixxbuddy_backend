@@ -928,6 +928,25 @@ const adminUpdateCartItemStatus = async (req, res) => {
       targetStatus = existingItem.status;
     }
 
+    // Check if target status is completed and quotation is pending
+    if (targetStatus === 'completed') {
+      const Quotation = require('../models/quotation.model');
+      const quotation = await Quotation.findOne({
+        $or: [
+          ...(existingItem.orderId ? [{ orderId: existingItem.orderId }] : []),
+          { orderId: existingItem._id.toString() },
+          ...(existingItem.quotationId ? [{ _id: existingItem.quotationId }] : [])
+        ]
+      });
+
+      if (quotation && quotation.status !== 'Accepted' && quotation.status !== 'Rejected') {
+        return res.status(400).json({
+          success: false,
+          message: 'Quotation approval pending. The customer must accept or reject the quotation before service can be completed.'
+        });
+      }
+    }
+
     if (assignedPartner && targetStatus === 'addToCart') {
       return res.status(400).json({
         success: false,

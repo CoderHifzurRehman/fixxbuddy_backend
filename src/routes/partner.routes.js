@@ -50,6 +50,8 @@ router.patch("/tasks/:taskId/status", authMiddleware, partnerController.updateTa
 router.patch('/tasks/:taskId/start-service', authMiddleware, partnerController.startService);
 router.post('/tasks/:taskId/verify-otp', authMiddleware, partnerController.verifyServiceOtp);
 router.patch('/tasks/:taskId/complete', authMiddleware, partnerController.completeService);
+router.patch('/tasks/:taskId/pause', authMiddleware, partnerController.pauseService);
+router.patch('/tasks/:taskId/resume', authMiddleware, partnerController.resumeService);
 router.patch('/tasks/:taskId/status', authMiddleware, partnerController.updateServiceStatus);
 router.post('/tasks/:taskId/upload-images', authMiddleware, upload.array('images', 10), partnerController.uploadServiceImages);
 
