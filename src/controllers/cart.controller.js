@@ -365,6 +365,70 @@ const updateCartItemStatus = async (req, res) => {
 
     let updateData = { status };
 
+    // Logic for Cancellation
+    if (status === 'cancelled') {
+      const existingCartItem = await Cart.findOne({
+        _id: req.params.cartItemId,
+        userId: req.user.id
+      });
+      if (!existingCartItem) {
+        return res.status(404).json({ success: false, message: 'Order not found' });
+      }
+      if (['completed', 'cancelled'].includes(existingCartItem.status)) {
+        return res.status(400).json({ success: false, message: `Order is already ${existingCartItem.status}` });
+      }
+
+      // Check remaining time before scheduled visit
+      let isWithinOneHour = false;
+      if (existingCartItem.scheduledDate) {
+        const visitTime = new Date(existingCartItem.scheduledDate);
+        if (existingCartItem.scheduledStartTime) {
+          const [h, m] = existingCartItem.scheduledStartTime.split(':').map(Number);
+          if (!isNaN(h)) {
+            visitTime.setHours(h, m || 0, 0, 0);
+          }
+        }
+        const diffMs = visitTime.getTime() - Date.now();
+        const diffHours = diffMs / (1000 * 60 * 60);
+        if (diffHours <= 1) {
+          isWithinOneHour = true;
+        }
+      }
+
+      let cancellationFee = 0;
+      let cancellationFeeAccepted = false;
+
+      if (isWithinOneHour) {
+        if (!req.body.cancellationFeeAccepted) {
+          return res.status(400).json({
+            success: false,
+            feeRequired: true,
+            message: 'Partner visit is scheduled within 1 hour. A ₹100 cancellation fee applies and must be accepted to cancel.'
+          });
+        }
+        cancellationFee = 100;
+        cancellationFeeAccepted = true;
+      }
+
+      const trackingMsg = isWithinOneHour
+        ? 'Booking cancelled by customer within 1 hour of scheduled visit. ₹100 cancellation fee applied (deducted from paid amount or added to next service).'
+        : 'Booking cancelled by customer before 1 hour of scheduled visit.';
+
+      updateData = {
+        ...updateData,
+        cancellationFee,
+        cancellationFeeAccepted,
+        cancelledAt: new Date(),
+        $push: {
+          tracking: {
+            status: 'cancelled',
+            message: trackingMsg,
+            date: new Date()
+          }
+        }
+      };
+    }
+
     // Logic for Checkout (changing status to pending)
     if (status === 'pending') {
       const cartItem = await Cart.findById(req.params.cartItemId);
@@ -550,6 +614,17 @@ const updateCartItemStatus = async (req, res) => {
         userId: req.user.id,
         orderId: updatedItem._id
       });
+    }
+
+    if (status === 'cancelled' && updatedItem.assignedPartner) {
+      try {
+        ably.channels.get(`partner-${updatedItem.assignedPartner}`).publish('task_cancelled', {
+          orderId: updatedItem.orderId || updatedItem._id,
+          message: `Booking #${updatedItem.orderId || updatedItem._id} was cancelled by the customer.`
+        });
+      } catch (err) {
+        console.warn('Ably notify partner error:', err);
+      }
     }
 
     res.status(200).json({
@@ -901,7 +976,18 @@ const getOrderInvoice = async (req, res) => {
 // @access  Private/Admin
 const adminUpdateCartItemStatus = async (req, res) => {
   try {
-    const { status, assignedPartner, scheduledDate, tracking } = req.body;
+    const {
+      status,
+      assignedPartner,
+      scheduledDate,
+      scheduledSlot,
+      scheduledStartTime,
+      scheduledEndTime,
+      tracking,
+      cancelledBy,
+      cancellationReason,
+      cancellationNotes
+    } = req.body;
 
     const existingItem = await Cart.findById(req.params.cartItemId);
     if (!existingItem) {
@@ -961,14 +1047,86 @@ const adminUpdateCartItemStatus = async (req, res) => {
       updateData.assignedPartner = assignedPartner || null;
     }
 
+    // Validate scheduled date & slot - Disallow assigning past date/time
     if (scheduledDate) {
+      let checkDateTime = new Date(scheduledDate);
+      if (scheduledStartTime) {
+        const [sh, sm] = scheduledStartTime.split(':').map(Number);
+        if (!isNaN(sh)) {
+          checkDateTime.setHours(sh, sm || 0, 0, 0);
+        }
+      } else if (typeof scheduledDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+        // Just a date without time - check if before today (IST midnight)
+        const todayZero = new Date();
+        todayZero.setHours(0, 0, 0, 0);
+        const inputZero = new Date(scheduledDate);
+        inputZero.setHours(0, 0, 0, 0);
+        if (inputZero < todayZero) {
+          return res.status(400).json({
+            success: false,
+            message: 'Cannot schedule service for a past date. Please select today or a future date.'
+          });
+        }
+      }
+
+      // Allow 5 minutes leeway for submission delay
+      const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+      if (scheduledStartTime && checkDateTime.getTime() < fiveMinutesAgo) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot assign or reschedule to a past slot. The selected time has already passed for today.'
+        });
+      } else if (!scheduledStartTime && typeof scheduledDate === 'string' && /T\d{2}:\d{2}/.test(scheduledDate)) {
+        if (checkDateTime.getTime() < fiveMinutesAgo) {
+          return res.status(400).json({
+            success: false,
+            message: 'Cannot schedule in the past. Please select a future date and time slot.'
+          });
+        }
+      }
+
       let dateStr = scheduledDate;
-      // If it's a date-time string without a timezone offset (like from datetime-local: YYYY-MM-DDTHH:mm),
-      // append the IST offset so it is always parsed relative to Indian Standard Time (Asia/Kolkata)
       if (typeof scheduledDate === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(scheduledDate)) {
         dateStr = `${scheduledDate}+05:30`;
       }
       updateData.scheduledDate = new Date(dateStr);
+
+      if (scheduledSlot) updateData.scheduledSlot = scheduledSlot;
+      if (scheduledStartTime) updateData.scheduledStartTime = scheduledStartTime;
+      if (scheduledEndTime) updateData.scheduledEndTime = scheduledEndTime;
+
+      if (existingItem.scheduledDate && (scheduledSlot !== existingItem.scheduledSlot || scheduledDate !== existingItem.scheduledDate?.toISOString())) {
+        updateData.rescheduledAt = new Date();
+      }
+    } else {
+      if (scheduledSlot) updateData.scheduledSlot = scheduledSlot;
+      if (scheduledStartTime) updateData.scheduledStartTime = scheduledStartTime;
+      if (scheduledEndTime) updateData.scheduledEndTime = scheduledEndTime;
+    }
+
+    // Cancellation tracking and metadata
+    let cancelTrackingItem = null;
+    if (targetStatus === 'cancelled') {
+      const actorRole = cancelledBy?.role || req.user?.role || 'admin';
+      const actorName = cancelledBy?.name || req.user?.fullName || req.user?.name || (actorRole === 'admin' ? 'Admin' : 'Management');
+      const reasonVal = cancellationReason || 'Cancelled by administration';
+      const notesVal = cancellationNotes || '';
+
+      updateData.cancelledAt = new Date();
+      updateData.cancellationReason = reasonVal;
+      updateData.cancellationNotes = notesVal;
+      updateData.cancelledBy = {
+        role: actorRole,
+        id: cancelledBy?.id || req.user?._id || req.user?.id || null,
+        name: actorName
+      };
+
+      const trackingText = `Order cancelled by ${actorRole.toUpperCase()} (${actorName}). Reason: ${reasonVal}${notesVal ? ` - Notes: ${notesVal}` : ''}`;
+      cancelTrackingItem = {
+        message: trackingText,
+        date: new Date(),
+        status: 'cancelled'
+      };
     }
 
     if (tracking) {
@@ -976,6 +1134,9 @@ const adminUpdateCartItemStatus = async (req, res) => {
         ...t,
         status: t.status || targetStatus
       }));
+      if (cancelTrackingItem && !trackingList.some(t => t.status === 'cancelled' && t.message === cancelTrackingItem.message)) {
+        trackingList.unshift(cancelTrackingItem);
+      }
       updateData.$push = {
         tracking: {
           $each: trackingList,
@@ -983,13 +1144,14 @@ const adminUpdateCartItemStatus = async (req, res) => {
         }
       };
     } else if (targetStatus !== existingItem.status || (assignedPartner && assignedPartner.toString() !== existingItem.assignedPartner?.toString())) {
+      const defaultItem = cancelTrackingItem || {
+        message: assignedPartner ? 'Partner assigned' : `Status updated to ${targetStatus}`,
+        date: new Date(),
+        status: targetStatus
+      };
       updateData.$push = {
         tracking: {
-          $each: [{
-            message: assignedPartner ? 'Partner assigned' : `Status updated to ${targetStatus}`,
-            date: new Date(),
-            status: targetStatus
-          }],
+          $each: [defaultItem],
           $sort: { date: -1 }
         }
       };
@@ -1290,6 +1452,126 @@ const ratePartner = async (req, res) => {
 };
 
 
+
+// @desc    Reschedule customer order slot
+// @route   PATCH /api/cart/reschedule/:cartItemId
+// @access  Private (Customer)
+const customerRescheduleSlot = async (req, res) => {
+  try {
+    const { cartItemId } = req.params;
+    const { scheduledDate, scheduledStartTime, scheduledEndTime, scheduledSlot } = req.body;
+
+    if (!scheduledDate || !scheduledStartTime || !scheduledEndTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Scheduled date, start time, and end time are required'
+      });
+    }
+
+    const order = await Cart.findOne({
+      _id: cartItemId,
+      userId: req.user.id
+    });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (['completed', 'cancelled'].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot reschedule: Order is already ${order.status}`
+      });
+    }
+
+    // Check that current time is at least 1 hour BEFORE the currently scheduled visit
+    if (order.scheduledDate) {
+      const currentVisitTime = new Date(order.scheduledDate);
+      if (order.scheduledStartTime) {
+        const [h, m] = order.scheduledStartTime.split(':').map(Number);
+        if (!isNaN(h)) {
+          currentVisitTime.setHours(h, m || 0, 0, 0);
+        }
+      }
+      const diffMs = currentVisitTime.getTime() - Date.now();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      if (diffHours <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Slots can only be rescheduled at least 1 hour prior to your currently scheduled visit time.'
+        });
+      }
+    }
+
+    // Validate new slot is at least 1 hour in the future
+    const newDateObj = new Date(scheduledDate);
+    const [newStartHour, newStartMin] = scheduledStartTime.split(':').map(Number);
+    newDateObj.setHours(newStartHour, newStartMin || 0, 0, 0);
+
+    if (newDateObj.getTime() - Date.now() < 60 * 60 * 1000) {
+      return res.status(400).json({
+        success: false,
+        message: 'New slot must be at least 1 hour in advance from the current time.'
+      });
+    }
+
+    // Rule: "not before slot only after slot they can select"
+    // If selecting on the same day as current scheduled date:
+    if (order.scheduledDate) {
+      const currD = new Date(order.scheduledDate).toISOString().slice(0, 10);
+      const newD = new Date(scheduledDate).toISOString().slice(0, 10);
+      if (currD === newD && order.scheduledStartTime) {
+        if (scheduledStartTime <= order.scheduledStartTime) {
+          return res.status(400).json({
+            success: false,
+            message: 'For the same date, you can only select a slot after your currently assigned slot.'
+          });
+        }
+      }
+    }
+
+    const slotLabel = scheduledSlot || `${scheduledStartTime} - ${scheduledEndTime}`;
+    const formattedDate = new Date(scheduledDate).toLocaleDateString();
+
+    order.scheduledDate = new Date(scheduledDate);
+    order.scheduledStartTime = scheduledStartTime;
+    order.scheduledEndTime = scheduledEndTime;
+    order.scheduledSlot = slotLabel;
+    order.rescheduledAt = new Date();
+
+    order.tracking.push({
+      status: order.status || 'inProgress',
+      message: `Service slot rescheduled by customer to ${formattedDate} (${slotLabel}).`,
+      date: new Date()
+    });
+
+    await order.save();
+
+    // Notify assigned partner if any
+    if (order.assignedPartner) {
+      try {
+        ably.channels.get(`partner-${order.assignedPartner}`).publish('task_rescheduled', {
+          orderId: order.orderId || order._id,
+          scheduledDate: order.scheduledDate,
+          scheduledSlot: slotLabel,
+          message: `Order #${order.orderId || order._id} was rescheduled by customer to ${formattedDate} (${slotLabel}).`
+        });
+      } catch (err) {
+        console.warn('Ably notify partner error:', err);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Service slot rescheduled successfully',
+      data: order
+    });
+  } catch (error) {
+    console.error('Error in customerRescheduleSlot:', error);
+    res.status(500).json({ success: false, message: 'Server error rescheduling slot' });
+  }
+};
+
 module.exports = {
   addToCart,
   getCartItems,
@@ -1306,4 +1588,5 @@ module.exports = {
   adminUpdateCartItemStatus,
   checkCartServiceability,
   ratePartner,
+  customerRescheduleSlot,
 };

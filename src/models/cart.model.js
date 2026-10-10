@@ -68,6 +68,27 @@ const cartSchema = new mongoose.Schema(
       type: String,
       default: "" // e.g. "11:30"
     },
+    scheduledSlot: {
+      type: String,
+      default: "" // e.g. "1:00 PM - 2:00 PM"
+    },
+    cancellationFee: {
+      type: Number,
+      default: 0
+    },
+    cancellationFeeAccepted: {
+      type: Boolean,
+      default: false
+    },
+    cancelledAt: Date,
+    cancelledBy: {
+      role: { type: String }, // 'customer', 'admin', 'manager', 'teamLeader', 'partner'
+      id: { type: mongoose.Schema.Types.ObjectId },
+      name: { type: String }
+    },
+    cancellationReason: { type: String, default: "" },
+    cancellationNotes: { type: String, default: "" },
+    rescheduledAt: Date,
     orderedAt: Date,
     tracking: [{
       message: String,

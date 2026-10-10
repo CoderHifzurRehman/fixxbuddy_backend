@@ -1520,3 +1520,87 @@ exports.resumeService = async (req, res) => {
     });
   }
 };
+
+
+// @desc    Reschedule task slot by partner
+// @route   PATCH /api/partners/tasks/:taskId/reschedule
+// @access  Private (Partner)
+// @desc    Reschedule task slot by partner (Blocked: only Admin/Manager can change/assign slots)
+// @route   PATCH /api/partners/tasks/:taskId/reschedule
+// @access  Private (Partner)
+exports.rescheduleTask = async (req, res) => {
+  return res.status(403).json({
+    success: false,
+    message: 'Partners are not permitted to change service appointment slots. Only managers or administrators have permission to reschedule or assign appointment slots.'
+  });
+};
+
+exports._unused_rescheduleTask = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { scheduledDate, scheduledStartTime, scheduledEndTime, scheduledSlot, reason = '' } = req.body;
+    const partnerId = req.user.id;
+
+    if (!scheduledDate || !scheduledStartTime || !scheduledEndTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Scheduled date, start time, and end time are required'
+      });
+    }
+
+    const task = await Cart.findOne({
+      _id: taskId,
+      assignedPartner: partnerId
+    });
+
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found or not assigned to you' });
+    }
+
+    if (['completed', 'cancelled'].includes(task.status)) {
+      return res.status(400).json({ success: false, message: `Cannot reschedule a ${task.status} task` });
+    }
+
+    const slotLabel = scheduledSlot || `${scheduledStartTime} - ${scheduledEndTime}`;
+    const formattedDate = new Date(scheduledDate).toLocaleDateString();
+
+    task.scheduledDate = new Date(scheduledDate);
+    task.scheduledStartTime = scheduledStartTime;
+    task.scheduledEndTime = scheduledEndTime;
+    task.scheduledSlot = slotLabel;
+    task.rescheduledAt = new Date();
+
+    const trackingMsg = reason
+      ? `Appointment slot changed by service partner to ${formattedDate} (${slotLabel}). Reason: ${reason}`
+      : `Appointment slot changed by service partner to ${formattedDate} (${slotLabel}).`;
+
+    task.tracking.push({
+      status: task.status,
+      message: trackingMsg,
+      date: new Date()
+    });
+
+    await task.save();
+
+    // Notify customer via Ably
+    if (task.userId) {
+      try {
+        ably.channels.get(`user-${task.userId}`).publish('order_status_updated', {
+          orderId: task.orderId || task._id,
+          message: `Your appointment slot has been updated by partner to ${formattedDate} (${slotLabel}).`
+        });
+      } catch (e) {
+        console.warn('Ably notify user error:', e);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Service slot updated successfully',
+      data: task
+    });
+  } catch (error) {
+    console.error('Error rescheduling partner task:', error);
+    res.status(500).json({ success: false, message: 'Server error rescheduling task' });
+  }
+};

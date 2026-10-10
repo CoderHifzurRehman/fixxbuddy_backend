@@ -53,6 +53,7 @@ router.patch('/tasks/:taskId/complete', authMiddleware, partnerController.comple
 router.patch('/tasks/:taskId/pause', authMiddleware, partnerController.pauseService);
 router.patch('/tasks/:taskId/resume', authMiddleware, partnerController.resumeService);
 router.patch('/tasks/:taskId/status', authMiddleware, partnerController.updateServiceStatus);
+router.patch('/tasks/:taskId/reschedule', authMiddleware, partnerController.rescheduleTask);
 router.post('/tasks/:taskId/upload-images', authMiddleware, upload.array('images', 10), partnerController.uploadServiceImages);
 
 module.exports = router;

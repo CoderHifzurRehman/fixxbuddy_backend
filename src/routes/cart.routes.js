@@ -26,7 +26,9 @@ router.get('/orders/:orderId/invoice', authMiddleware, cartController.getOrderIn
 router.put('/update/:cartItemId', authMiddleware, cartController.updateCartItem);
 
 // Update cart status item quantity (authenticated users only)
-router.put('/update-status/:cartItemId', authMiddleware, cartController.updateCartItemStatus); // Add this line
+router.put('/update-status/:cartItemId', authMiddleware, cartController.updateCartItemStatus);
+// Reschedule cart item slot (authenticated users only)
+router.patch('/reschedule/:cartItemId', authMiddleware, cartController.customerRescheduleSlot); // Add this line
 
 // Rate partner and submit feedback (authenticated users only)
 router.post('/:cartItemId/rate', authMiddleware, cartController.ratePartner);
