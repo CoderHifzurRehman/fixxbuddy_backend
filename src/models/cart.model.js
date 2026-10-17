@@ -145,7 +145,7 @@ const cartSchema = new mongoose.Schema(
       notes: { type: String, default: "" },
       status: {
         type: String,
-        enum: ['none', 'pending', 'approved', 'assigned', 'inProgress', 'completed', 'rejected'],
+        enum: ['none', 'pending', 'approved', 'assigned', 'inProgress', 'completed', 'rejected', 'not_applicable', 'cancelled'],
         default: 'none'
       },
       claimedAt: { type: Date },
@@ -156,7 +156,8 @@ const cartSchema = new mongoose.Schema(
       scheduledSlot: { type: String, default: "" },
       resolvedAt: { type: Date },
       resolutionNotes: { type: String, default: "" },
-      rejectionReason: { type: String, default: "" }
+      rejectionReason: { type: String, default: "" },
+      notApplicableReason: { type: String, default: "" }
     },
     serviceNotes: {
       type: String
