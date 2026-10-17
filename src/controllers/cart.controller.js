@@ -56,7 +56,16 @@ const addToCart = async (req, res) => {
 
     const serviceDoc = await ServiceType.findById(serviceId);
     const cartItem = await Cart.create({
-      warrantyMonths: serviceDoc?.warrantyMonths ?? 3,$1status: 'addToCart'
+      userId: req.user.id,
+      orderId: generateOrderId(),
+      serviceId,
+      serviceName,
+      serviceCost: Number(serviceCost), // Ensure number type
+      serviceImage,
+      mainServiceId,
+      applicationId,
+      warrantyMonths: serviceDoc?.warrantyMonths ?? 3,
+      status: 'addToCart'
     });
 
     res.status(201).json({
