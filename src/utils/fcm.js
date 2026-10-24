@@ -146,13 +146,13 @@ async function sendPushToPartner(partnerId, { title, body, data = {} }) {
     }
 
     if (!partner || !partner.fcmToken) {
-      console.log([FCM] Partner  has no registered FCM token);
+      console.log(`[FCM] Partner ${partnerId} has no registered FCM token`);
       return null;
     }
 
     return await sendPushNotification(partner.fcmToken, { title, body, data });
   } catch (error) {
-    console.error([FCM] Failed to send push to partner :, error.message);
+    console.error(`[FCM] Failed to send push to partner ${partnerId}:`, error.message);
     return null;
   }
 }
