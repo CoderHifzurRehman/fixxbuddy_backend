@@ -23,6 +23,7 @@ router.post('/upload/images/:id', upload.fields([
 ]), partnerController.uploadImages);
 
 router.post("/login", partnerController.partnerLogin);
+router.post("/fcm-token", authMiddleware, partnerController.saveFcmToken);
 
 
 // Partner Management

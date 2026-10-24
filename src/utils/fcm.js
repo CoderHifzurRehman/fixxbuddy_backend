@@ -129,8 +129,37 @@ async function sendPushToUser(userId, { title, body, data = {} }) {
   }
 }
 
+const Partner = require("../models/partner.model");
+
+/**
+ * Send push notification to a partner by their MongoDB _id or partnerId
+ */
+async function sendPushToPartner(partnerId, { title, body, data = {} }) {
+  try {
+    let partner = null;
+    const mongoose = require("mongoose");
+    if (mongoose.Types.ObjectId.isValid(partnerId)) {
+      partner = await Partner.findById(partnerId).select("fcmToken");
+    }
+    if (!partner) {
+      partner = await Partner.findOne({ partnerId }).select("fcmToken");
+    }
+
+    if (!partner || !partner.fcmToken) {
+      console.log([FCM] Partner  has no registered FCM token);
+      return null;
+    }
+
+    return await sendPushNotification(partner.fcmToken, { title, body, data });
+  } catch (error) {
+    console.error([FCM] Failed to send push to partner :, error.message);
+    return null;
+  }
+}
+
 module.exports = {
   admin,
   sendPushNotification,
-  sendPushToUser
+  sendPushToUser,
+  sendPushToPartner
 };

@@ -253,7 +253,12 @@ const partnerSchema = new mongoose.Schema(
         feedback: { type: String, default: '' },
         createdAt: { type: Date, default: Date.now }
       }
-    ]
+    ],
+    fcmToken: {
+      type: String,
+      default: null,
+      trim: true,
+    },
   },
   {
     timestamps: true,

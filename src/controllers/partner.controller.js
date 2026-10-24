@@ -637,7 +637,7 @@ exports.updateTaskStatus = async (req, res) => {
     });
 
     sendPushToUser(task.userId, {
-      title: "FixxBuddy Order Update 🔔",
+      title: "FixxBuddy Order Update ðŸ””",
       body: `Your order status has been updated to: ${status}`,
       data: {
         route: "/orders",
@@ -898,7 +898,7 @@ exports.completeService = async (req, res) => {
     });
 
     sendPushToUser(task.userId, {
-      title: "FixxBuddy Order Completed! 🎉",
+      title: "FixxBuddy Order Completed! ðŸŽ‰",
       body: "Your service request has been completed successfully.",
       data: {
         route: "/orders",
@@ -990,7 +990,7 @@ exports.updateServiceStatus = async (req, res) => {
     });
 
     sendPushToUser(task.userId, {
-      title: "FixxBuddy Order Update 🔔",
+      title: "FixxBuddy Order Update ðŸ””",
       body: `Your order status has been updated to: ${status}`,
       data: {
         route: "/orders",
@@ -1403,7 +1403,7 @@ exports.pauseService = async (req, res) => {
 
     try {
       sendPushToUser(task.userId, {
-        title: 'Service Update: Temporarily On Hold ⏸️',
+        title: 'Service Update: Temporarily On Hold â¸ï¸',
         body: `Your service is temporarily on hold: ${reason}. Work will resume shortly.`,
         data: {
           route: '/orders',
@@ -1494,7 +1494,7 @@ exports.resumeService = async (req, res) => {
 
     try {
       sendPushToUser(task.userId, {
-        title: 'Service Resumed! ▶️',
+        title: 'Service Resumed! â–¶ï¸',
         body: 'Your partner has resumed work on your service.',
         data: {
           route: '/orders',
@@ -1602,5 +1602,27 @@ exports._unused_rescheduleTask = async (req, res) => {
   } catch (error) {
     console.error('Error rescheduling partner task:', error);
     res.status(500).json({ success: false, message: 'Server error rescheduling task' });
+  }
+};
+
+
+exports.saveFcmToken = async (req, res) => {
+  try {
+    const partnerId = req.user?.id || req.user?._id || req.partner?._id || req.partner?.id;
+    const { fcmToken } = req.body;
+
+    if (!partnerId) {
+      return res.status(401).json({ success: false, message: "Unauthorized partner access" });
+    }
+
+    if (!fcmToken) {
+      return res.status(400).json({ success: false, message: "fcmToken is required" });
+    }
+
+    await Partner.findByIdAndUpdate(partnerId, { fcmToken });
+    return res.status(200).json({ success: true, message: "Partner FCM token saved successfully" });
+  } catch (error) {
+    console.error("Error saving partner FCM token:", error);
+    return res.status(500).json({ success: false, message: "Server error saving FCM token", error: error.message });
   }
 };

@@ -8,7 +8,7 @@ const Partner = require('../models/partner.model');
 const Expertise = require('../models/expertise.model');
 const mongoose = require('mongoose');
 const ably = require('../utils/ably');
-const { sendPushToUser } = require('../utils/fcm');
+const { sendPushToUser, sendPushToPartner } = require('../utils/fcm');
 const { createNotification } = require('../utils/notificationService');
 
 
@@ -412,7 +412,7 @@ const updateCartItemStatus = async (req, res) => {
           return res.status(400).json({
             success: false,
             feeRequired: true,
-            message: 'Partner visit is scheduled within 1 hour. A ₹100 cancellation fee applies and must be accepted to cancel.'
+            message: 'Partner visit is scheduled within 1 hour. A â‚¹100 cancellation fee applies and must be accepted to cancel.'
           });
         }
         cancellationFee = 100;
@@ -420,7 +420,7 @@ const updateCartItemStatus = async (req, res) => {
       }
 
       const trackingMsg = isWithinOneHour
-        ? 'Booking cancelled by customer within 1 hour of scheduled visit. ₹100 cancellation fee applied (deducted from paid amount or added to next service).'
+        ? 'Booking cancelled by customer within 1 hour of scheduled visit. â‚¹100 cancellation fee applied (deducted from paid amount or added to next service).'
         : 'Booking cancelled by customer before 1 hour of scheduled visit.';
 
       updateData = {
@@ -1230,7 +1230,7 @@ const adminUpdateCartItemStatus = async (req, res) => {
       });
 
       sendPushToUser(updatedItem.userId, {
-        title: "Partner Assigned! 🛠️",
+        title: "Partner Assigned! ðŸ› ï¸",
         body: "A partner has been assigned to your FixxBuddy service request.",
         data: {
           route: "/orders",
@@ -1240,7 +1240,7 @@ const adminUpdateCartItemStatus = async (req, res) => {
       });
       createNotification({
         userId: updatedItem.userId,
-        title: "Partner Assigned! 🛠️",
+        title: "Partner Assigned! ðŸ› ï¸",
         message: `A partner has been assigned to your FixxBuddy service request (${updatedItem.serviceName || updatedItem.orderId || ''}).`,
         type: "partner_assigned",
         link: `/orders?orderId=${updatedItem.orderId || updatedItem._id}`,

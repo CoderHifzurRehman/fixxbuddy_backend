@@ -7,7 +7,7 @@ const MainservicesCategories = require('../models/mainServicesCategories.model')
 const Hub = require('../models/hub.model');
 const Cart = require('../models/cart.model');
 const ably = require('../utils/ably');
-const { sendPushToUser } = require('../utils/fcm');
+const { sendPushToUser, sendPushToPartner } = require('../utils/fcm');
 const { createNotification } = require('../utils/notificationService');
 
 const normalizeRole = (role) => (role || '').toUpperCase();
@@ -748,9 +748,24 @@ exports.changeRole = async (req, res) => {
     }
 
     const currentRole = normalizeRole(partner.role);
+    const previousRole = currentRole;
     const targetRole = normalizeRole(newRole);
 
     if (currentRole === targetRole) {
+      if (targetRole === 'PARTNER') {
+        if (partner.managerConfig || partner.teamLeaderConfig) {
+          partner.managerConfig = undefined;
+          partner.teamLeaderConfig = undefined;
+          await Team.updateMany({ managerId: partner._id }, { managerId: null });
+          await Partner.updateMany({ 'teamLeaderConfig.managerId': partner._id }, { 'teamLeaderConfig.managerId': null });
+          await partner.save();
+        }
+        return res.status(200).json({
+          statusCode: 200,
+          message: `Role for ${partner.fullName} updated to ${targetRole}`,
+          data: partner
+        });
+      }
       return res.status(400).json({ statusCode: 400, message: 'Partner already has this role' });
     }
 
@@ -825,23 +840,27 @@ exports.changeRole = async (req, res) => {
 
     await partner.save();
 
-    await ManagementAudit.create({
-      action: 'DEMOTED_TO_PARTNER',
-      performedBy: {
-        id: req.user?.id || req.user?._id,
-        name: req.user?.fullName || req.user?.firstName || 'Admin',
-        role: req.user?.role || 'ADMIN'
-      },
-      targetUser: {
-        id: partner._id,
-        name: partner.fullName,
-        partnerId: partner.partnerId,
-        role: targetRole
-      },
-      previousRole,
-      newRole: targetRole,
-      details: { forced: force }
-    });
+    try {
+      await ManagementAudit.create({
+        action: targetRole === 'PARTNER' ? 'DEMOTED_TO_PARTNER' : `ROLE_CHANGED_TO_${targetRole}`,
+        performedBy: {
+          id: req.user?.id || req.user?._id,
+          name: req.user?.fullName || req.user?.firstName || 'Admin',
+          role: req.user?.role || 'ADMIN'
+        },
+        targetUser: {
+          id: partner._id,
+          name: partner.fullName,
+          partnerId: partner.partnerId,
+          role: targetRole
+        },
+        previousRole,
+        newRole: targetRole,
+        details: { forced: force }
+      });
+    } catch (auditErr) {
+      console.error('Failed to create management audit entry:', auditErr);
+    }
 
     res.status(200).json({
       statusCode: 200,
@@ -3312,7 +3331,7 @@ exports.assignJob = async (req, res) => {
 
       if (updatedRequest.userId) {
         sendPushToUser(updatedRequest.userId, {
-          title: "Partner Assigned! 🛠️",
+          title: "Partner Assigned! ðŸ› ï¸",
           body: `Partner ${targetPartner.fullName} has been assigned to your service request.`,
           data: {
             route: "/orders",
@@ -3322,7 +3341,7 @@ exports.assignJob = async (req, res) => {
         });
         createNotification({
           userId: updatedRequest.userId,
-          title: "Partner Assigned! 🛠️",
+          title: "Partner Assigned! ðŸ› ï¸",
           message: `Partner ${targetPartner.fullName} has been assigned to your service request (${updatedRequest.serviceName || 'Order #' + (updatedRequest.orderId || '')}).`,
           type: "partner_assigned",
           link: `/orders?orderId=${updatedRequest.orderId || updatedRequest._id}`,
@@ -4603,7 +4622,7 @@ exports.assignJob = async (req, res) => {
 
       if (updatedRequest.userId) {
         sendPushToUser(updatedRequest.userId, {
-          title: "Partner Assigned! 🛠️",
+          title: "Partner Assigned! ðŸ› ï¸",
           body: `Partner ${targetPartner.fullName} has been assigned to your service request.`,
           data: {
             route: "/orders",
@@ -4613,7 +4632,7 @@ exports.assignJob = async (req, res) => {
         });
         createNotification({
           userId: updatedRequest.userId,
-          title: "Partner Reassigned 🔄",
+          title: "Partner Reassigned ðŸ”„",
           message: `Your service request has been reassigned to partner ${targetPartner.fullName}.`,
           type: "partner_reassigned",
           link: `/orders?orderId=${updatedRequest.orderId || updatedRequest._id}`,
@@ -5282,7 +5301,7 @@ exports.rescheduleJob = async (req, res) => {
 
       if (request.userId || updatedRequest.userId) {
         sendPushToUser(request.userId || updatedRequest.userId, {
-          title: "FixxBuddy Schedule Updated 🕒",
+          title: "FixxBuddy Schedule Updated ðŸ•’",
           body: `Your service booking has been rescheduled to ${newScheduleStr}`,
           data: {
             route: "/orders",
