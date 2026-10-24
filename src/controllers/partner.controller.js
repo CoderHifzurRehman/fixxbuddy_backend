@@ -1,3 +1,16 @@
+
+exports.getPartnerProfile = async (req, res) => {
+  try {
+    const partnerId = req.user.id || req.user._id;
+    const partner = await Partner.findById(partnerId);
+    if (!partner) {
+      return res.status(404).json({ success: false, message: "Partner profile not found" });
+    }
+    return res.status(200).json({ success: true, data: partner });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 const { sendEmail } = require("../config/email");
 const Partner = require("../models/partner.model");
 const { generateToken } = require("../utils/jwt");

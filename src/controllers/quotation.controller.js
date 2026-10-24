@@ -249,6 +249,42 @@ exports.updateQuotation = async (req, res) => {
        }
     }
 
+        // Trigger real-time notifications for revised quotation
+    try {
+      ably.channels.get(`user-${quotation.userId}`).publish("quotation_generated", {
+        message: `Your service partner has updated quotation #${quotation.orderId || ''}. Please review the updated items.`,
+        quotationId: quotation._id,
+        orderId: quotation.orderId,
+        status: quotation.status,
+        totalAmount: quotation.totalAmount
+      });
+      ably.channels.get("admin-channel").publish("quotation_updated", {
+        message: `Quotation updated by partner for Order #${quotation.orderId || ''}`,
+        requestId: quotation.orderId,
+        quotationId: quotation._id,
+        status: quotation.status
+      });
+      ably.channels.get(`partner-${quotation.partnerId}`).publish("quotation_updated", {
+        message: `Quotation updated and sent to customer`,
+        requestId: quotation.orderId,
+        quotationId: quotation._id,
+        status: quotation.status
+      });
+    } catch (ablyErr) {
+      console.warn('Ably quotation notification notice:', ablyErr);
+    }
+
+    try {
+      const { sendPushToUser } = require('../utils/fcm');
+      sendPushToUser(quotation.userId, {
+        title: 'Quotation Revised 📋',
+        body: `A revised quotation (₹${quotation.totalAmount}) is ready for your review.`,
+        data: { route: '/orders', quotationId: String(quotation._id), orderId: String(quotation.orderId || '') }
+      });
+    } catch (pushErr) {
+      console.warn('FCM quotation push notice:', pushErr);
+    }
+
     res.status(200).json(updatedQuotation);
 
   } catch (error) {

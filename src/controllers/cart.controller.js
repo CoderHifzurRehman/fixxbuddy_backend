@@ -1583,6 +1583,7 @@ const customerRescheduleSlot = async (req, res) => {
     order.scheduledEndTime = scheduledEndTime;
     order.scheduledSlot = slotLabel;
     order.rescheduledAt = new Date();
+    order.isRescheduled = true;
 
     order.tracking.push({
       status: order.status || 'inProgress',
@@ -1591,6 +1592,29 @@ const customerRescheduleSlot = async (req, res) => {
     });
 
     await order.save();
+
+    // Notify Admin Portal of Reschedule via Ably
+    try {
+      ably.channels.get('admin-channel').publish('task_updated', {
+        type: 'job_rescheduled',
+        orderId: order.orderId || order._id,
+        scheduledDate: order.scheduledDate,
+        scheduledSlot: slotLabel,
+        isRescheduled: true,
+        rescheduledAt: order.rescheduledAt,
+        message: `Order #${order.orderId || order._id} was rescheduled by customer to ${formattedDate} (${slotLabel}).`
+      });
+      ably.channels.get('admin-channel').publish('job_rescheduled', {
+        orderId: order.orderId || order._id,
+        scheduledDate: order.scheduledDate,
+        scheduledSlot: slotLabel,
+        isRescheduled: true,
+        rescheduledAt: order.rescheduledAt,
+        message: `Order #${order.orderId || order._id} was rescheduled by customer to ${formattedDate} (${slotLabel}).`
+      });
+    } catch (adminAblyErr) {
+      console.warn('Ably notify admin error:', adminAblyErr);
+    }
 
     // Notify assigned partner if any
     if (order.assignedPartner) {

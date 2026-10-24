@@ -3209,20 +3209,22 @@ exports.assignJob = async (req, res) => {
       return res.status(400).json({ statusCode: 400, message: 'Cannot assign: Target partner account is inactive.' });
     }
 
-    if (normalizeRole(targetPartner.role) !== 'PARTNER') {
+    const targetPartnerRole = normalizeRole(targetPartner.role);
+    if (targetPartnerRole !== 'PARTNER' && targetPartnerRole !== 'TEAM_LEADER') {
       await session.abortTransaction();
       session.endSession();
-      return res.status(400).json({ statusCode: 400, message: 'Cannot assign: Target user is not an operational partner.' });
+      return res.status(400).json({ statusCode: 400, message: 'Cannot assign: Managers cannot receive direct service assignments. Target must be a Partner or Team Leader.' });
     }
 
-    if (!targetPartner.teamId) {
+    const effectiveTeamId = targetPartner.teamId || targetPartner.teamLeaderConfig?.teamId;
+    if (!effectiveTeamId) {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({ statusCode: 400, message: 'Cannot assign: Target partner is not assigned to any team.' });
     }
 
     // 5. Manager Scope Verification
-    const targetTeam = await Team.findById(targetPartner.teamId).session(session);
+    const targetTeam = await Team.findById(effectiveTeamId).session(session);
     if (!targetTeam) {
       await session.abortTransaction();
       session.endSession();
@@ -3466,14 +3468,22 @@ exports.reassignJob = async (req, res) => {
       return res.status(400).json({ statusCode: 400, message: 'Cannot reassign: Target partner account is inactive.' });
     }
 
-    if (!targetPartner.teamId) {
+    const reassignPartnerRole = normalizeRole(targetPartner.role);
+    if (reassignPartnerRole !== 'PARTNER' && reassignPartnerRole !== 'TEAM_LEADER') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ statusCode: 400, message: 'Cannot reassign: Managers cannot receive direct service assignments. Target must be a Partner or Team Leader.' });
+    }
+
+    const effectiveReassignTeamId = targetPartner.teamId || targetPartner.teamLeaderConfig?.teamId;
+    if (!effectiveReassignTeamId) {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({ statusCode: 400, message: 'Cannot reassign: Target partner is not assigned to any team.' });
     }
 
     const sourceTeam = sourcePartner.teamId ? await Team.findById(sourcePartner.teamId).session(session) : null;
-    const targetTeam = await Team.findById(targetPartner.teamId).session(session);
+    const targetTeam = await Team.findById(effectiveReassignTeamId).session(session);
     if (!targetTeam) {
       await session.abortTransaction();
       session.endSession();
