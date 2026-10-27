@@ -15,7 +15,12 @@ const app = express();
 app.set('trust proxy', 1); // ✅ FIX FOR VERCEL
 app.use(express.json({ limit: '20mb' }));
 // Enable CORS for all routes
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'X-CSRF-Token']
+}));
+app.options('*', cors());
 
 // const logStream = fs.createWriteStream(path.join(__dirname, 'requests.log'), { flags: 'a' });
 
