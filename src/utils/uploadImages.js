@@ -25,6 +25,20 @@ const sanitizeS3Key = (input) => {
     .replace(/^\/+|\/+$/g, ''); // Trim leading/trailing slashes
 };
 // Function to check if a file exists in S3
+
+// Helper to determine S3 folder prefix based on environment
+const getEnvPrefix = () => {
+  if (process.env.AWS_S3_FOLDER_PREFIX) {
+    return process.env.AWS_S3_FOLDER_PREFIX.trim().replace(/^\/+|/+$/g, '');
+  }
+  const env = (process.env.NODE_ENV || 'development').toLowerCase();
+  if (env === 'production') {
+    return 'main';
+  }
+  // All other environments (testing, beta, development) use 'beta'
+  return 'beta';
+};
+
 const checkFileExists = async (filePath) => {
   try {
     const command = new HeadObjectCommand({
@@ -118,7 +132,9 @@ exports.uploadSingleImageToS3 = async (file, folderName) => {
     mimetype = `image/${extension}`;
   }
 
-  const sanitizedFolderName = sanitizeS3Key(folderName);
+  const envPrefix = getEnvPrefix();
+  const targetFolder = (envPrefix && !folderName.startsWith(envPrefix + '/')) ? `${envPrefix}/${folderName}` : folderName;
+  const sanitizedFolderName = sanitizeS3Key(targetFolder);
   const sanitizedFileName = sanitizeFileName(fileName);
   
   // Generate unique file name
@@ -260,7 +276,9 @@ const checkFolderExists = async (folderPrefix) => {
 
 // Function to get a unique folder name by appending _1, _2 etc. if it already exists
 exports.getUniqueS3FolderName = async (baseFolderName) => {
-  const sanitizedBase = sanitizeS3Key(baseFolderName);
+  const envPrefix = getEnvPrefix();
+  const targetFolder = (envPrefix && !baseFolderName.startsWith(envPrefix + '/')) ? `${envPrefix}/${baseFolderName}` : baseFolderName;
+  const sanitizedBase = sanitizeS3Key(targetFolder);
   let folderName = sanitizedBase;
   let counter = 0;
   
