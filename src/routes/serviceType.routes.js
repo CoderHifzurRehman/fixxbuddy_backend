@@ -34,6 +34,7 @@ router.put(
 
 
 // Route to get a single main service by ID
+router.get('/:id/reviews', serviceTypeController.getServiceReviews);
 router.get('/:id', serviceTypeController.getSingleServiceType);
 
 router.get('/list/:id', serviceTypeController.getServiceTypeList);

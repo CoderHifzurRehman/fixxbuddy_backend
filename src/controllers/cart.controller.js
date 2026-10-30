@@ -1377,19 +1377,42 @@ const checkCartServiceability = async (req, res) => {
 };
 
 
-// @desc    Rate partner and add optional feedback for completed order
+// @desc    Rate service and partner for completed order (prevents duplicate ratings per booking)
 // @route   POST /api/cart/:cartItemId/rate
 // @access  Private
 const ratePartner = async (req, res) => {
   try {
     const { cartItemId } = req.params;
-    const { rating, feedback } = req.body;
+    const {
+      serviceRating,
+      serviceFeedback,
+      partnerRating,
+      partnerFeedback,
+      rating,
+      feedback
+    } = req.body;
 
-    const numericRating = Number(rating);
-    if (!numericRating || numericRating < 1 || numericRating > 5) {
+    const numServiceRating = serviceRating ? Number(serviceRating) : null;
+    const numPartnerRating = partnerRating ? Number(partnerRating) : (rating ? Number(rating) : null);
+
+    if (!numServiceRating && !numPartnerRating) {
       return res.status(400).json({
         success: false,
-        message: 'Rating must be a number between 1 and 5'
+        message: 'Please provide a rating (1 to 5 stars) for either the service or partner'
+      });
+    }
+
+    if (numServiceRating && (numServiceRating < 1 || numServiceRating > 5)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Service rating must be a number between 1 and 5'
+      });
+    }
+
+    if (numPartnerRating && (numPartnerRating < 1 || numPartnerRating > 5)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Partner rating must be a number between 1 and 5'
       });
     }
 
@@ -1415,88 +1438,137 @@ const ratePartner = async (req, res) => {
       });
     }
 
-    if (!cartItem.assignedPartner) {
-      return res.status(400).json({
-        success: false,
-        message: 'No partner assigned to this order'
-      });
-    }
-
-    const partnerId = cartItem.assignedPartner;
-    const partner = await Partner.findById(partnerId);
-
-    if (!partner) {
-      return res.status(404).json({
-        success: false,
-        message: 'Assigned partner not found'
-      });
-    }
-
     // Fetch user details for display name
     const User = require('../models/user.model');
     const userDoc = await User.findById(userId);
     const userName = userDoc ? `${userDoc.firstName || ''} ${userDoc.lastName || ''}`.trim() : 'Customer';
 
-    const feedbackText = feedback ? feedback.trim() : '';
+    const serviceFeedbackText = serviceFeedback !== undefined ? String(serviceFeedback).trim() : (feedback !== undefined ? String(feedback).trim() : '');
+    const partnerFeedbackText = partnerFeedback !== undefined ? String(partnerFeedback).trim() : (feedback !== undefined ? String(feedback).trim() : '');
 
-    // Update cart item rating fields
-    cartItem.rating = numericRating;
-    cartItem.ratingFeedback = feedbackText;
+    let serviceAverageRating = null;
+    let serviceTotalRatings = null;
+    let partnerAverageRating = null;
+    let partnerTotalRatings = null;
+
+    // 1. Process Service Rating
+    if (numServiceRating && cartItem.serviceId) {
+      const ServiceType = require('../models/serviceType.model');
+      const service = await ServiceType.findById(cartItem.serviceId);
+      if (service) {
+        if (!Array.isArray(service.ratings)) {
+          service.ratings = [];
+        }
+
+        // Prevent multiple reviews for a single booking: match by cartId
+        const existingServiceRatingIndex = service.ratings.findIndex(
+          r => r.cartId && r.cartId.toString() === cartItemId
+        );
+
+        if (existingServiceRatingIndex >= 0) {
+          service.ratings[existingServiceRatingIndex].rating = numServiceRating;
+          service.ratings[existingServiceRatingIndex].feedback = serviceFeedbackText;
+          service.ratings[existingServiceRatingIndex].userName = userName;
+          service.ratings[existingServiceRatingIndex].createdAt = new Date();
+        } else {
+          service.ratings.push({
+            cartId: cartItem._id,
+            orderId: cartItem.orderId || '',
+            userId: userId,
+            userName: userName,
+            rating: numServiceRating,
+            feedback: serviceFeedbackText,
+            createdAt: new Date()
+          });
+        }
+
+        const sTotal = service.ratings.length;
+        const sSum = service.ratings.reduce((acc, curr) => acc + curr.rating, 0);
+        service.totalRatings = sTotal;
+        service.averageRating = sTotal > 0 ? Number((sSum / sTotal).toFixed(1)) : 0;
+        await service.save();
+
+        serviceAverageRating = service.averageRating;
+        serviceTotalRatings = service.totalRatings;
+      }
+    }
+
+    // 2. Process Partner Rating
+    if (numPartnerRating && cartItem.assignedPartner) {
+      const partner = await Partner.findById(cartItem.assignedPartner);
+      if (partner) {
+        if (!Array.isArray(partner.ratings)) {
+          partner.ratings = [];
+        }
+
+        // Prevent multiple reviews for a single booking: match by cartId
+        const existingPartnerRatingIndex = partner.ratings.findIndex(
+          r => r.cartId && r.cartId.toString() === cartItemId
+        );
+
+        if (existingPartnerRatingIndex >= 0) {
+          partner.ratings[existingPartnerRatingIndex].rating = numPartnerRating;
+          partner.ratings[existingPartnerRatingIndex].feedback = partnerFeedbackText;
+          partner.ratings[existingPartnerRatingIndex].userName = userName;
+          partner.ratings[existingPartnerRatingIndex].createdAt = new Date();
+        } else {
+          partner.ratings.push({
+            cartId: cartItem._id,
+            orderId: cartItem.orderId || '',
+            userId: userId,
+            userName: userName,
+            rating: numPartnerRating,
+            feedback: partnerFeedbackText,
+            createdAt: new Date()
+          });
+        }
+
+        const pTotal = partner.ratings.length;
+        const pSum = partner.ratings.reduce((acc, curr) => acc + curr.rating, 0);
+        partner.totalRatings = pTotal;
+        partner.averageRating = pTotal > 0 ? Number((pSum / pTotal).toFixed(1)) : 0;
+        await partner.save();
+
+        partnerAverageRating = partner.averageRating;
+        partnerTotalRatings = partner.totalRatings;
+      }
+    }
+
+    // 3. Update Cart Item
+    if (numServiceRating) {
+      cartItem.serviceRating = numServiceRating;
+      cartItem.serviceFeedback = serviceFeedbackText;
+    }
+    if (numPartnerRating) {
+      cartItem.partnerRating = numPartnerRating;
+      cartItem.partnerFeedback = partnerFeedbackText;
+    }
+    cartItem.rating = numPartnerRating || numServiceRating || cartItem.rating;
+    cartItem.ratingFeedback = partnerFeedbackText || serviceFeedbackText || cartItem.ratingFeedback;
     cartItem.isRated = true;
     cartItem.ratedAt = new Date();
     await cartItem.save();
-
-    // Check if rating from this cart item already exists in partner's ratings
-    const existingRatingIndex = partner.ratings.findIndex(
-      r => r.cartId && r.cartId.toString() === cartItemId
-    );
-
-    if (existingRatingIndex >= 0) {
-      partner.ratings[existingRatingIndex].rating = numericRating;
-      partner.ratings[existingRatingIndex].feedback = feedbackText;
-      partner.ratings[existingRatingIndex].createdAt = new Date();
-    } else {
-      partner.ratings.push({
-        cartId: cartItem._id,
-        orderId: cartItem.orderId || '',
-        userId: userId,
-        userName: userName,
-        rating: numericRating,
-        feedback: feedbackText,
-        createdAt: new Date()
-      });
-    }
-
-    // Recalculate partner's averageRating and totalRatings
-    const totalCount = partner.ratings.length;
-    const sumRatings = partner.ratings.reduce((acc, curr) => acc + curr.rating, 0);
-    const avg = totalCount > 0 ? Number((sumRatings / totalCount).toFixed(1)) : 0;
-
-    partner.totalRatings = totalCount;
-    partner.averageRating = avg;
-
-    await partner.save();
 
     res.status(200).json({
       success: true,
       message: 'Rating and feedback submitted successfully',
       data: {
         cartItem,
-        partnerAverageRating: partner.averageRating,
-        partnerTotalRatings: partner.totalRatings
+        serviceAverageRating,
+        serviceTotalRatings,
+        partnerAverageRating,
+        partnerTotalRatings
       }
     });
   } catch (error) {
-    console.error('Error rating partner:', error);
+    console.error('Error rating order:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error while rating partner',
+      message: 'Server error while rating order',
       error: error.message
     });
   }
 };
-
-
 
 // @desc    Reschedule customer order slot
 // @route   PATCH /api/cart/reschedule/:cartItemId

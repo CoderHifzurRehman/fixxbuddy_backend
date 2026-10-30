@@ -219,6 +219,26 @@ const cartSchema = new mongoose.Schema(
         default: []
       }
     },
+    serviceRating: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: null
+    },
+    serviceFeedback: {
+      type: String,
+      default: ""
+    },
+    partnerRating: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: null
+    },
+    partnerFeedback: {
+      type: String,
+      default: ""
+    },
     rating: {
       type: Number,
       min: 1,
