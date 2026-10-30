@@ -412,7 +412,7 @@ const updateCartItemStatus = async (req, res) => {
           return res.status(400).json({
             success: false,
             feeRequired: true,
-            message: 'Partner visit is scheduled within 1 hour. A â‚¹100 cancellation fee applies and must be accepted to cancel.'
+            message: 'Partner visit is scheduled within 1 hour. A ₹100 cancellation fee applies and must be accepted to cancel.'
           });
         }
         cancellationFee = 100;
@@ -420,7 +420,7 @@ const updateCartItemStatus = async (req, res) => {
       }
 
       const trackingMsg = isWithinOneHour
-        ? 'Booking cancelled by customer within 1 hour of scheduled visit. â‚¹100 cancellation fee applied (deducted from paid amount or added to next service).'
+        ? 'Booking cancelled by customer within 1 hour of scheduled visit. ₹100 cancellation fee applied (deducted from paid amount or added to next service).'
         : 'Booking cancelled by customer before 1 hour of scheduled visit.';
 
       updateData = {
