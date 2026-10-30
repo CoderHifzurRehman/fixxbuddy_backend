@@ -1850,7 +1850,10 @@ const adminWarrantyClaimAction = async (req, res) => {
       scheduledSlot,
       status,
       reason,
-      notes
+      notes,
+      rejectionReason,
+      notApplicableReason,
+      resolutionNotes
     } = req.body;
 
     const cartItem = await Cart.findById(cartItemId)
@@ -1878,9 +1881,9 @@ const adminWarrantyClaimAction = async (req, res) => {
         scheduledStartTime: scheduledStartTime || '',
         scheduledEndTime: scheduledEndTime || '',
         assignedPartner: assignedPartner || null,
-        rejectionReason: status === 'rejected' ? (reason || '') : '',
-        resolutionNotes: status === 'completed' ? (notes || '') : '',
-        notApplicableReason: status === 'not_applicable' ? (notApplicableReason || reason || notes || 'Deemed not applicable by staff') : '',
+        rejectionReason: status === 'rejected' ? ((rejectionReason || reason || notes || '').trim()) : '',
+        resolutionNotes: status === 'completed' ? ((resolutionNotes || notes || reason || '').trim()) : '',
+        notApplicableReason: status === 'not_applicable' ? ((notApplicableReason || reason || notes || 'Deemed not applicable by staff').trim()) : '',
         resolvedAt: status === 'completed' ? new Date() : null
       };
 
@@ -1898,11 +1901,18 @@ const adminWarrantyClaimAction = async (req, res) => {
       });
     }
 
-    if (!cartItem.warrantyClaim || !cartItem.warrantyClaim.claimed) {
-      return res.status(400).json({
-        success: false,
-        message: 'No active warranty claim on this service order'
-      });
+    if (!cartItem.warrantyClaim) {
+      cartItem.warrantyClaim = {
+        claimed: true,
+        claimId: `WC-${Date.now().toString().slice(-6)}`,
+        status: status || 'pending',
+        reason: (reason || 'Warranty claim registered by staff').trim()
+      };
+    } else if (!cartItem.warrantyClaim.claimed) {
+      cartItem.warrantyClaim.claimed = true;
+      if (!cartItem.warrantyClaim.claimId) {
+        cartItem.warrantyClaim.claimId = `WC-${Date.now().toString().slice(-6)}`;
+      }
     }
 
 
@@ -2073,7 +2083,51 @@ const adminWarrantyClaimAction = async (req, res) => {
       });
     }
 
-    if (action === 'update_status' || action === 'edit_claim') {
+    // Dedicated handler for editing claim details without forcing status transitions
+    if (action === 'edit_claim') {
+      if (reason !== undefined) cartItem.warrantyClaim.reason = (reason || '').trim();
+      if (notes !== undefined) cartItem.warrantyClaim.notes = (notes || '').trim();
+      if (rejectionReason !== undefined) cartItem.warrantyClaim.rejectionReason = (rejectionReason || '').trim();
+      if (notApplicableReason !== undefined) cartItem.warrantyClaim.notApplicableReason = (notApplicableReason || '').trim();
+      if (resolutionNotes !== undefined) cartItem.warrantyClaim.resolutionNotes = (resolutionNotes || '').trim();
+      if (status && status !== 'none') cartItem.warrantyClaim.status = status;
+
+      cartItem.tracking.unshift({
+        message: `Warranty claim details updated by staff${notes ? `: ${notes}` : ''}`,
+        date: new Date(),
+        status: 'warrantyClaimEdited'
+      });
+
+      await cartItem.save();
+
+      try {
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: cartItem.warrantyClaim.status,
+          claimId: cartItem.warrantyClaim.claimId
+        });
+
+        const userChannelId = cartItem.userId?._id ? cartItem.userId._id.toString() : (cartItem.userId ? cartItem.userId.toString() : null);
+        if (userChannelId) {
+          ably.channels.get(`user-${userChannelId}`).publish("order_status_updated", {
+            orderId: cartItem.orderId || cartItem._id,
+            claimId: cartItem.warrantyClaim.claimId,
+            message: 'Warranty claim details updated by support.'
+          });
+        }
+      } catch (e) {
+        console.warn('Ably notify error:', e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Warranty claim details updated successfully',
+        data: cartItem
+      });
+    }
+
+    if (action === 'update_status') {
       const validStatuses = ['pending', 'approved', 'assigned', 'inProgress', 'completed', 'rejected', 'not_applicable', 'cancelled', 'refund_initiated', 'refunded'];
       const targetClaimStatus = status || cartItem.warrantyClaim.status;
       
@@ -2099,22 +2153,24 @@ const adminWarrantyClaimAction = async (req, res) => {
       if (scheduledEndTime !== undefined) cartItem.warrantyClaim.scheduledEndTime = scheduledEndTime;
 
       if (targetClaimStatus === 'completed') {
+        const finalResNotes = (resolutionNotes || notes || reason || 'Warranty service issue resolved').trim();
         cartItem.warrantyClaim.resolvedAt = new Date();
-        cartItem.warrantyClaim.resolutionNotes = notes || reason || 'Warranty service issue resolved';
+        cartItem.warrantyClaim.resolutionNotes = finalResNotes;
         cartItem.tracking.unshift({
-          message: `Warranty claim resolved successfully: ${cartItem.warrantyClaim.resolutionNotes}`,
+          message: `Warranty claim resolved successfully: ${finalResNotes}`,
           date: new Date(),
           status: 'warrantyResolved'
         });
       } else if (targetClaimStatus === 'rejected') {
-        cartItem.warrantyClaim.rejectionReason = reason || notes || 'Warranty claim rejected by management';
+        const finalRejectionReason = (rejectionReason || reason || notes || 'Warranty claim rejected by management').trim();
+        cartItem.warrantyClaim.rejectionReason = finalRejectionReason;
         cartItem.tracking.unshift({
-          message: `Warranty claim rejected: ${cartItem.warrantyClaim.rejectionReason}`,
+          message: `Warranty claim rejected: ${finalRejectionReason}`,
           date: new Date(),
           status: 'warrantyRejected'
         });
       } else if (targetClaimStatus === 'not_applicable') {
-        const naReason = notApplicableReason || reason || notes || 'Issue outside warranty scope / Not applicable';
+        const naReason = (notApplicableReason || reason || notes || 'Issue outside warranty scope / Not applicable').trim();
         cartItem.warrantyClaim.notApplicableReason = naReason;
         cartItem.warrantyClaim.rejectionReason = naReason;
         cartItem.tracking.unshift({
@@ -2131,6 +2187,44 @@ const adminWarrantyClaimAction = async (req, res) => {
       }
 
       await cartItem.save();
+
+      // Notify Ably admin and customer
+      try {
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: targetClaimStatus,
+          claimId: cartItem.warrantyClaim.claimId,
+          rejectionReason: cartItem.warrantyClaim.rejectionReason,
+          notApplicableReason: cartItem.warrantyClaim.notApplicableReason
+        });
+        ably.channels.get("admin-channel").publish("task_updated", {
+          message: `Warranty claim status: ${targetClaimStatus}`,
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: targetClaimStatus
+        });
+
+        const userChannelId = cartItem.userId?._id ? cartItem.userId._id.toString() : (cartItem.userId ? cartItem.userId.toString() : null);
+        if (userChannelId) {
+          const userMsg = targetClaimStatus === 'rejected'
+            ? `Warranty claim rejected: ${cartItem.warrantyClaim.rejectionReason}`
+            : targetClaimStatus === 'not_applicable'
+            ? `Warranty claim not applicable: ${cartItem.warrantyClaim.notApplicableReason}`
+            : `Warranty claim status updated to ${targetClaimStatus}`;
+
+          ably.channels.get(`user-${userChannelId}`).publish("order_status_updated", {
+            orderId: cartItem.orderId || cartItem._id,
+            claimId: cartItem.warrantyClaim.claimId,
+            status: targetClaimStatus,
+            rejectionReason: cartItem.warrantyClaim.rejectionReason,
+            notApplicableReason: cartItem.warrantyClaim.notApplicableReason,
+            message: userMsg
+          });
+        }
+      } catch (e) {
+        console.warn('Ably notification error:', e.message);
+      }
 
       return res.status(200).json({
         success: true,
