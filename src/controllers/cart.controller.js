@@ -1486,7 +1486,17 @@ const ratePartner = async (req, res) => {
         const sSum = service.ratings.reduce((acc, curr) => acc + curr.rating, 0);
         service.totalRatings = sTotal;
         service.averageRating = sTotal > 0 ? Number((sSum / sTotal).toFixed(1)) : 0;
-        await service.save();
+        await ServiceType.findByIdAndUpdate(
+          service._id,
+          {
+            $set: {
+              ratings: service.ratings,
+              totalRatings: service.totalRatings,
+              averageRating: service.averageRating
+            }
+          },
+          { runValidators: false }
+        );
 
         serviceAverageRating = service.averageRating;
         serviceTotalRatings = service.totalRatings;
@@ -1527,7 +1537,18 @@ const ratePartner = async (req, res) => {
         const pSum = partner.ratings.reduce((acc, curr) => acc + curr.rating, 0);
         partner.totalRatings = pTotal;
         partner.averageRating = pTotal > 0 ? Number((pSum / pTotal).toFixed(1)) : 0;
-        await partner.save();
+        await Partner.findByIdAndUpdate(
+          partner._id,
+          {
+            $set: {
+              ratings: partner.ratings,
+              totalRatings: partner.totalRatings,
+              averageRating: partner.averageRating,
+              ...(partner.role ? { role: String(partner.role).toUpperCase() } : {})
+            }
+          },
+          { runValidators: false }
+        );
 
         partnerAverageRating = partner.averageRating;
         partnerTotalRatings = partner.totalRatings;
@@ -1547,7 +1568,22 @@ const ratePartner = async (req, res) => {
     cartItem.ratingFeedback = partnerFeedbackText || serviceFeedbackText || cartItem.ratingFeedback;
     cartItem.isRated = true;
     cartItem.ratedAt = new Date();
-    await cartItem.save();
+    await Cart.findByIdAndUpdate(
+      cartItem._id,
+      {
+        $set: {
+          serviceRating: cartItem.serviceRating,
+          serviceFeedback: cartItem.serviceFeedback,
+          partnerRating: cartItem.partnerRating,
+          partnerFeedback: cartItem.partnerFeedback,
+          rating: cartItem.rating,
+          ratingFeedback: cartItem.ratingFeedback,
+          isRated: true,
+          ratedAt: cartItem.ratedAt
+        }
+      },
+      { runValidators: false }
+    );
 
     res.status(200).json({
       success: true,

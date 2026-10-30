@@ -88,7 +88,7 @@ const partnerSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['ADMIN', 'SUBADMIN', 'MANAGER', 'TEAM_LEADER', 'PARTNER'],
+      enum: ['ADMIN', 'SUBADMIN', 'MANAGER', 'TEAM_LEADER', 'PARTNER', 'admin', 'subadmin', 'manager', 'team_leader', 'partner'],
       default: 'PARTNER',
       set: (val) => (val || 'PARTNER').toUpperCase(),
       get: (val) => (val || 'PARTNER').toUpperCase()
@@ -278,6 +278,13 @@ const partnerSchema = new mongoose.Schema(
   }
 );
 
+
+partnerSchema.pre('validate', function (next) {
+  if (this.role) {
+    this.role = String(this.role).toUpperCase();
+  }
+  next();
+});
 
 partnerSchema.pre('save', function (next) {
   this.fullName = `${this.firstName} ${this.lastName}`.trim();
