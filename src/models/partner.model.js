@@ -259,6 +259,19 @@ const partnerSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    deductions: [
+      {
+        amount: { type: Number, required: true },
+        reason: { type: String, default: '' },
+        cartItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Cart' },
+        orderId: { type: String, default: '' },
+        deductedAt: { type: Date, default: Date.now }
+      }
+    ],
+    totalDeductions: {
+      type: Number,
+      default: 0
+    },
   },
   {
     timestamps: true,

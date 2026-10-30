@@ -2615,7 +2615,11 @@ exports.getManagerRequests = async (req, res) => {
       status: { $ne: 'addToCart' }
     };
 
-    if (status !== 'all') {
+    if (status === 'refund_initiated') {
+      baseQuery['warrantyClaim.status'] = 'refund_initiated';
+    } else if (status === 'warrantyClaims') {
+      baseQuery['warrantyClaim.claimed'] = true;
+    } else if (status !== 'all') {
       baseQuery.status = status;
     }
 
@@ -2627,6 +2631,7 @@ exports.getManagerRequests = async (req, res) => {
       // 'all' includes both assigned partners within scope AND unassigned requests within scope
       baseQuery.$or = [
         { assignedPartner: { $in: candidatePartnerIds } },
+        { 'warrantyClaim.assignedPartner': { $in: candidatePartnerIds } },
         unassignedMatchBlock
       ];
     }
@@ -3008,10 +3013,17 @@ exports.getTeamLeaderRequests = async (req, res) => {
 
     const query = {
       status: { $ne: 'addToCart' },
-      assignedPartner: targetPartnerFilter
+      $or: [
+        { assignedPartner: targetPartnerFilter },
+        { 'warrantyClaim.assignedPartner': targetPartnerFilter }
+      ]
     };
 
-    if (status !== 'all') {
+    if (status === 'refund_initiated') {
+      query['warrantyClaim.status'] = 'refund_initiated';
+    } else if (status === 'warrantyClaims') {
+      query['warrantyClaim.claimed'] = true;
+    } else if (status !== 'all') {
       query.status = status;
     }
 
@@ -3046,6 +3058,7 @@ exports.getTeamLeaderRequests = async (req, res) => {
         .populate('userId', 'firstName lastName fullName email contactNumber')
         .populate('serviceId', 'serviceName serviceCost')
         .populate('assignedPartner', 'fullName partnerId email contactNumber profilePic')
+        .populate('warrantyClaim.assignedPartner', 'fullName partnerId email contactNumber profilePic')
         .sort(sortOption)
         .skip(skip)
         .limit(limitNum),
@@ -4347,6 +4360,7 @@ exports.getTeamLeaderRequests = async (req, res) => {
         .populate('userId', 'firstName lastName fullName email contactNumber')
         .populate('serviceId', 'serviceName serviceCost')
         .populate('assignedPartner', 'fullName partnerId email contactNumber profilePic')
+        .populate('warrantyClaim.assignedPartner', 'fullName partnerId email contactNumber profilePic')
         .sort(sortOption)
         .skip(skip)
         .limit(limitNum),

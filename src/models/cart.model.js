@@ -145,7 +145,7 @@ const cartSchema = new mongoose.Schema(
       notes: { type: String, default: "" },
       status: {
         type: String,
-        enum: ['none', 'pending', 'approved', 'assigned', 'inProgress', 'completed', 'rejected', 'not_applicable', 'cancelled'],
+        enum: ['none', 'pending', 'approved', 'assigned', 'inProgress', 'completed', 'rejected', 'not_applicable', 'cancelled', 'refund_initiated', 'refunded'],
         default: 'none'
       },
       claimedAt: { type: Date },
@@ -157,7 +157,29 @@ const cartSchema = new mongoose.Schema(
       resolvedAt: { type: Date },
       resolutionNotes: { type: String, default: "" },
       rejectionReason: { type: String, default: "" },
-      notApplicableReason: { type: String, default: "" }
+      notApplicableReason: { type: String, default: "" },
+
+      // Repair assessment & previous partner deduction fields
+      estimatedRepairCost: { type: Number, default: 0 },
+      previousPartner: { type: mongoose.Schema.Types.ObjectId, ref: 'partner' },
+      previousPartnerEarnings: { type: Number, default: 0 },
+      deductionAmount: { type: Number, default: 0 },
+      isDeductedFromPreviousPartner: { type: Boolean, default: false },
+      notRepairable: { type: Boolean, default: false },
+      notRepairableReason: { type: String, default: "" },
+      inspectionNotes: { type: String, default: "" },
+
+      // Refund initiation & lifecycle fields
+      refundStatus: {
+        type: String,
+        enum: ['none', 'initiated', 'approved', 'processed', 'rejected'],
+        default: 'none'
+      },
+      refundAmount: { type: Number, default: 0 },
+      refundInitiatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'partner' },
+      refundInitiatedAt: { type: Date },
+      refundProcessedAt: { type: Date },
+      refundNotes: { type: String, default: "" }
     },
     serviceNotes: {
       type: String

@@ -1905,6 +1905,82 @@ const adminWarrantyClaimAction = async (req, res) => {
       });
     }
 
+
+    // Admin / Manager process or approve customer refund
+    if (action === 'approve_refund' || action === 'process_refund') {
+      cartItem.warrantyClaim.refundStatus = 'approved';
+      cartItem.warrantyClaim.refundProcessedAt = new Date();
+      cartItem.warrantyClaim.status = 'refunded';
+      cartItem.status = 'refunded';
+
+      const approvedRefundAmt = cartItem.warrantyClaim.refundAmount || cartItem.finalAmount || cartItem.serviceCost || 0;
+      cartItem.tracking.unshift({
+        message: `Customer refund of ₹${approvedRefundAmt} approved and processed by Management.${notes ? ` Notes: ${notes}` : ''}`,
+        date: new Date(),
+        status: 'warrantyRefundApproved'
+      });
+
+      await cartItem.save();
+
+      try {
+        ably.channels.get("admin-channel").publish("task_updated", {
+          message: `Refund of ₹${approvedRefundAmt} approved for Order #${cartItem.orderId}`,
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'refunded'
+        });
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'refunded'
+        });
+      } catch (e) {
+        console.warn('Ably error:', e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Customer refund of ₹${approvedRefundAmt} approved and marked as processed`,
+        data: cartItem
+      });
+    }
+
+    if (action === 'reject_refund') {
+      cartItem.warrantyClaim.refundStatus = 'rejected';
+      cartItem.warrantyClaim.status = 'inProgress';
+
+      const rejectReason = (reason || notes || 'Refund request rejected by Management').trim();
+      cartItem.tracking.unshift({
+        message: `Warranty refund request rejected by Management: ${rejectReason}. Assigned for repair inspection.`,
+        date: new Date(),
+        status: 'warrantyRefundRejected'
+      });
+
+      await cartItem.save();
+
+      try {
+        ably.channels.get("admin-channel").publish("task_updated", {
+          message: `Refund rejected for Order #${cartItem.orderId}`,
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'inProgress'
+        });
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'inProgress'
+        });
+      } catch (e) {
+        console.warn('Ably error:', e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Warranty refund request rejected',
+        data: cartItem
+      });
+    }
+
     if (action === 'revoke_claim' || action === 'reset_claim') {
       cartItem.warrantyClaim = {
         claimed: false,
@@ -1998,7 +2074,7 @@ const adminWarrantyClaimAction = async (req, res) => {
     }
 
     if (action === 'update_status' || action === 'edit_claim') {
-      const validStatuses = ['pending', 'approved', 'assigned', 'inProgress', 'completed', 'rejected', 'not_applicable', 'cancelled'];
+      const validStatuses = ['pending', 'approved', 'assigned', 'inProgress', 'completed', 'rejected', 'not_applicable', 'cancelled', 'refund_initiated', 'refunded'];
       const targetClaimStatus = status || cartItem.warrantyClaim.status;
       
       if (status && !validStatuses.includes(status)) {
