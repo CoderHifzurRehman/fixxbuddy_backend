@@ -712,6 +712,9 @@ const getAllUsersDetails = async (req, res) => {
       limit = 10,
       status,
       search,
+      service,
+      fromDate,
+      toDate,
       sortBy = 'requestedDate', // New: added sorting
       sortOrder = 'desc' // New: added sort order
     } = req.query;
@@ -727,9 +730,28 @@ const getAllUsersDetails = async (req, res) => {
       }
     }
 
-    // First get all requests with user data that match the status filter
+    if (service && service !== 'all') {
+      requestQuery.serviceName = { $regex: new RegExp(`^${service}$`, 'i') };
+    }
+
+    if (fromDate || toDate) {
+      const dateFilter = {};
+      if (fromDate) dateFilter.$gte = new Date(fromDate);
+      if (toDate) {
+        const to = new Date(toDate);
+        to.setHours(23, 59, 59, 999);
+        dateFilter.$lte = to;
+      }
+      requestQuery.$or = [
+        { createdAt: dateFilter },
+        { updatedAt: dateFilter },
+        { scheduledDate: dateFilter }
+      ];
+    }
+
+    // First get all requests with user data that match the status and filter criteria
     const requests = await Cart.find(requestQuery)
-      .populate('userId', 'firstName lastName email contactNumbers')
+      .populate('userId', 'firstName lastName email contactNumbers phone')
       .sort({ createdAt: -1 }) // Sort requests by creation date
       .lean();
 
@@ -858,6 +880,15 @@ const getAllUsersDetails = async (req, res) => {
       hasWarrantyClaim: (userData.warrantyClaimsCount || 0) > 0
     }));
 
+    // Fetch unique services list for filter dropdown
+    let availableServices = [];
+    try {
+      availableServices = await Cart.distinct('serviceName');
+      availableServices = availableServices.filter(Boolean).sort();
+    } catch (e) {
+      console.warn('Could not fetch distinct service names:', e.message);
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -866,7 +897,8 @@ const getAllUsersDetails = async (req, res) => {
         currentPage: parseInt(page),
         totalPages: Math.ceil(totalCount / limit),
         sortBy,
-        sortOrder
+        sortOrder,
+        availableServices
       }
     });
   } catch (error) {
@@ -883,15 +915,69 @@ const getAllUsersDetails = async (req, res) => {
 const getUserRequests = async (req, res) => {
   try {
     const userId = req.params.userId;
+    const { sortBy, sortOrder, status, fromDate, toDate, service } = req.query;
 
-    const requests = await Cart.find({
-      userId: userId,
-    }).populate('serviceId', 'serviceName serviceCost description deliveryAddress contactNumber')
-      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise').populate('warrantyClaim.assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise');
+    const filter = { userId: userId };
+
+    if (status && status !== 'all') {
+      if (status === 'warrantyClaims') {
+        filter['warrantyClaim.claimed'] = true;
+      } else {
+        filter.status = status;
+      }
+    }
+
+    if (service && service !== 'all') {
+      filter.serviceName = { $regex: new RegExp(`^${service}$`, 'i') };
+    }
+
+    if (fromDate || toDate) {
+      filter.$or = [
+        {
+          updatedAt: {
+            ...(fromDate ? { $gte: new Date(fromDate) } : {}),
+            ...(toDate ? { $lte: new Date(new Date(toDate).setHours(23, 59, 59, 999)) } : {})
+          }
+        },
+        {
+          scheduledDate: {
+            ...(fromDate ? { $gte: new Date(fromDate) } : {}),
+            ...(toDate ? { $lte: new Date(new Date(toDate).setHours(23, 59, 59, 999)) } : {})
+          }
+        }
+      ];
+    }
+
+    let sort = { updatedAt: -1 };
+    if (sortBy) {
+      const order = sortOrder === 'asc' ? 1 : -1;
+      if (sortBy === 'requestedDate' || sortBy === 'updatedAt') sort = { updatedAt: order };
+      else if (sortBy === 'createdAt') sort = { createdAt: order };
+      else if (sortBy === 'scheduledDate') sort = { scheduledDate: order };
+      else if (sortBy === 'serviceCost' || sortBy === 'amount') sort = { finalAmount: order, serviceCost: order };
+      else if (sortBy === 'serviceName') sort = { serviceName: order };
+      else if (sortBy === 'status') sort = { status: order };
+    }
+
+    const requests = await Cart.find(filter)
+      .populate('userId', 'firstName lastName fullName email contactNumbers phone addresses')
+      .populate('serviceId', 'serviceName serviceCost description deliveryAddress contactNumber')
+      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise profilePic averageRating totalRatings')
+      .populate('warrantyClaim.assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise profilePic')
+      .sort(sort);
+
+    let userObj = null;
+    try {
+      const User = require('../models/user.model');
+      userObj = await User.findById(userId).select('firstName lastName fullName email contactNumbers phone addresses');
+    } catch (e) {
+      console.warn('Could not fetch user by ID:', e.message);
+    }
 
     res.status(200).json({
       success: true,
-      data: requests
+      data: requests,
+      user: userObj || requests[0]?.userId || null
     });
   } catch (error) {
     console.error('Error fetching user requests:', error);
