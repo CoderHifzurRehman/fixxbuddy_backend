@@ -25,6 +25,7 @@ router.post("/resetpassword", userController.resetPassword);
 router.get("/profile", authMiddleware, userController.getUserProfile);
 router.patch("/update/profile/:id", authMiddleware, upload.single('image'), userController.updateUserProfile);
 router.post("/fcm-token", authMiddleware, userController.saveFcmToken);
+router.post("/accept-terms", authMiddleware, userController.acceptTerms);
 
 // Address management routes
 router.post("/addresses", authMiddleware, userController.addAddress);

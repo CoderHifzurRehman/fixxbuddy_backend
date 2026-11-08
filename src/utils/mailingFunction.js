@@ -637,5 +637,120 @@ function forgotPasswordMailTemplate(data) {
   </html>`;
 }
 
-module.exports = { welcomeMailTemplate, otpMailTemplate, serviceStartOtpTemplate, partnerWelcomeMailTemplate, termsAcceptedMailTemplate, forgotPasswordMailTemplate };
+
+function userTermsAcceptedMailTemplate(userData) {
+    const { name, date, ipAddress } = userData;
+
+    const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    const formattedDate = date instanceof Date ? date.toLocaleDateString('en-IN', dateOptions) : date;
+
+    return `
+  <html>
+  <head>
+      <style>
+          body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              line-height: 1.6;
+              color: #333333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 0;
+              background-color: #f4f7f9;
+          }
+          .container {
+              margin: 20px auto;
+              background-color: #ffffff;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+          }
+          .header {
+              background-color: #0d9488;
+              padding: 30px 20px;
+              text-align: center;
+          }
+          .header img {
+              max-width: 180px;
+          }
+          .content {
+              padding: 40px 30px;
+          }
+          .content h2 {
+              color: #0d9488;
+              font-size: 24px;
+              margin-bottom: 20px;
+              text-align: center;
+          }
+          .content p {
+              font-size: 16px;
+              color: #555555;
+              margin-bottom: 20px;
+          }
+          .details-box {
+              background-color: #f0fdfa;
+              border-left: 4px solid #0d9488;
+              padding: 20px;
+              margin: 25px 0;
+              border-radius: 4px;
+          }
+          .details-row {
+              margin-bottom: 10px;
+              font-size: 15px;
+          }
+          .details-label {
+              font-weight: bold;
+              color: #333333;
+              display: inline-block;
+              width: 120px;
+          }
+          .details-value {
+              color: #555555;
+          }
+          .footer {
+              background-color: #f9fafb;
+              padding: 20px;
+              text-align: center;
+              font-size: 13px;
+              color: #888888;
+              border-top: 1px solid #eeeeee;
+          }
+      </style>
+  </head>
+  <body>
+      <div class="container">
+          <div class="header">
+              <img src="https://fixxbuddy.s3.ap-south-1.amazonaws.com/Website/Images/fixxbuddy_white_logo.png" alt="Fixxbuddy Logo">
+          </div>
+          
+          <div class="content">
+              <h2>Terms & Conditions Accepted</h2>
+              <p>Dear ${name},</p>
+              <p>This email confirms that you have successfully accepted the Fixxbuddy Customer Terms & Conditions and Privacy Policy for your account.</p>
+              
+              <div class="details-box">
+                  <div class="details-row">
+                      <span class="details-label">Date & Time:</span>
+                      <span class="details-value">${formattedDate}</span>
+                  </div>
+                  <div class="details-row">
+                      <span class="details-label">IP Address:</span>
+                      <span class="details-value">${ipAddress || 'Not recorded'}</span>
+                  </div>
+              </div>
+              
+              <p>You can now book certified home services with 100% FixxBuddy Service Guarantee, transparent pricing, and verified professionals.</p>
+              
+              <p>If you did not perform this action, please contact our support team immediately.</p>
+              <p>Warm regards,<br>The Fixxbuddy Team</p>
+          </div>
+          
+          <div class="footer">
+              <p>© ${new Date().getFullYear()} Fixxbuddy. All rights reserved.</p>
+          </div>
+      </div>
+  </body>
+  </html>`;
+}
+
+module.exports = { welcomeMailTemplate, otpMailTemplate, serviceStartOtpTemplate, partnerWelcomeMailTemplate, termsAcceptedMailTemplate, forgotPasswordMailTemplate, userTermsAcceptedMailTemplate };
 
