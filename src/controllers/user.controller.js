@@ -28,6 +28,26 @@ exports.userRegistration = async (req, res) => {
   try {
     const { firstName, lastName, email, password, termsAccepted } = req.body;
 
+    let firstNameVal = (firstName || '').trim();
+    let lastNameVal = (lastName !== undefined && lastName !== null) ? String(lastName).trim() : '';
+
+    if (!firstNameVal && req.body.name) {
+      const parts = String(req.body.name).trim().split(/\s+/);
+      firstNameVal = parts[0] || '';
+      lastNameVal = parts.slice(1).join(' ') || '';
+    } else if (!firstNameVal && req.body.fullName) {
+      const parts = String(req.body.fullName).trim().split(/\s+/);
+      firstNameVal = parts[0] || '';
+      lastNameVal = parts.slice(1).join(' ') || '';
+    }
+
+    if (!firstNameVal) {
+      return res.status(400).send({
+        statusCode: 400,
+        message: "First name is required."
+      });
+    }
+
     const isTermsAccepted = termsAccepted === true || termsAccepted === 'true';
     if (!isTermsAccepted) {
       return res.status(400).send({
@@ -43,11 +63,8 @@ exports.userRegistration = async (req, res) => {
     let imageUrl = "";
     
     if (file) {
-      const folderName = `user/profilePic/${email}`; // Customize the folder name if needed
-      // console.log(folderName);
-
+      const folderName = `user/profilePic/${email}`;
       imageUrl = await uploadSingleImageToS3(file, folderName);
-      // console.log(imageUrl);
     }
 
     const existingUser = await User.findOne({ email });
@@ -67,10 +84,13 @@ exports.userRegistration = async (req, res) => {
       });
     }
 
+    const calculatedFullName = [firstNameVal, lastNameVal].filter(Boolean).join(' ') || firstNameVal;
+
     // Proceed to create a new user with terms acceptance
     const newUser = new User({
-      firstName,
-      lastName,
+      firstName: firstNameVal,
+      lastName: lastNameVal,
+      fullName: calculatedFullName,
       email,
       imageUrl,
       password,
@@ -87,7 +107,7 @@ exports.userRegistration = async (req, res) => {
     try {
       const subject = "Terms and Conditions Accepted - Fixxbuddy";
       const userDataForEmail = {
-        name: `${savedUser.firstName || ''} ${savedUser.lastName || ''}`.trim() || 'Customer',
+        name: savedUser.fullName || [savedUser.firstName, savedUser.lastName].filter(Boolean).join(' ') || savedUser.firstName || 'Customer',
         date: savedUser.termsAcceptedAt,
         ipAddress: ipAddress
       };
@@ -96,11 +116,12 @@ exports.userRegistration = async (req, res) => {
       console.error("Error sending terms accepted email:", emailError);
     }
 
-    // Generate a token (Make sure you have the token generation logic)
-    const token = generateToken(savedUser); // Example function, replace with actual
+    // Generate a token
+    const token = generateToken(savedUser);
     const sendData = {
       firstName: savedUser?.firstName,
-      lastName: savedUser?.lastName,
+      lastName: savedUser?.lastName || "",
+      fullName: savedUser?.fullName || savedUser?.firstName || "",
       email: savedUser?.email,
       imageUrl,
       role: savedUser?.role,
@@ -310,8 +331,13 @@ exports.updateUserProfile = async (req, res) => {
     }
 
     // Update user fields
-    user.firstName = firstName || user.firstName;
-    user.lastName = lastName || user.lastName;
+    if (firstName !== undefined && firstName !== null) {
+      user.firstName = firstName.trim();
+    }
+    if (lastName !== undefined && lastName !== null) {
+      user.lastName = lastName.trim();
+    }
+    user.fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.firstName || '';
     user.imageUrl = imageUrl;
 
     // Save the updated user document
@@ -808,7 +834,7 @@ exports.acceptTerms = async (req, res) => {
     try {
       const subject = "Terms and Conditions Accepted - Fixxbuddy";
       const userDataForEmail = {
-        name: `${updatedUser.firstName || ''} ${updatedUser.lastName || ''}`.trim() || 'Customer',
+        name: updatedUser.fullName || [updatedUser.firstName, updatedUser.lastName].filter(Boolean).join(' ') || updatedUser.firstName || 'Customer',
         date: updatedUser.termsAcceptedAt,
         ipAddress: ipAddress
       };

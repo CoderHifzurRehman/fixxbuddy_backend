@@ -275,7 +275,10 @@ function serviceStartOtpTemplate(user, otp) {
       
       <div class="content">
           <h2>Service Starting Notification</h2>
-          <p>Dear ${user.firstName} ${user.lastName},</p>
+          ${(() => {
+    const customerName = user ? (user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ') || user.name || 'Customer') : 'Customer';
+    return `<p>Dear ${customerName},</p>`;
+  })()}
           
           <div class="info-box">
               <p><strong>Your service professional is arriving and has requested to start the service.</strong></p>
