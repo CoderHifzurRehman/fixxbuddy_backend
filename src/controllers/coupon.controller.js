@@ -23,13 +23,27 @@ exports.createCoupon = async (req, res) => {
       });
     }
 
+    let parsedValidFrom = validFrom ? new Date(validFrom) : new Date();
+    if (typeof validFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(validFrom)) {
+      parsedValidFrom = new Date(`${validFrom}T00:00:00.000+05:30`);
+    } else if (parsedValidFrom && !isNaN(parsedValidFrom.getTime())) {
+      parsedValidFrom.setHours(0, 0, 0, 0);
+    }
+
+    let parsedValidUntil = new Date(validUntil);
+    if (typeof validUntil === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(validUntil)) {
+      parsedValidUntil = new Date(`${validUntil}T23:59:59.999+05:30`);
+    } else if (parsedValidUntil && !isNaN(parsedValidUntil.getTime())) {
+      parsedValidUntil.setHours(23, 59, 59, 999);
+    }
+
     const newCoupon = new Coupon({
       code,
       discountPercentage,
       maxDiscountAmount,
-      validFrom,
-      validUntil,
-      applicableTo,
+      validFrom: parsedValidFrom,
+      validUntil: parsedValidUntil,
+      applicableTo: Array.isArray(applicableTo) ? applicableTo : [],
     });
 
     const savedCoupon = await newCoupon.save();
@@ -126,10 +140,26 @@ exports.updateCoupon = async (req, res) => {
     // Update fields (prevent updating code for simplicity/integrity)
     if (discountPercentage !== undefined) coupon.discountPercentage = discountPercentage;
     if (maxDiscountAmount !== undefined) coupon.maxDiscountAmount = maxDiscountAmount;
-    if (validFrom !== undefined) coupon.validFrom = validFrom;
-    if (validUntil !== undefined) coupon.validUntil = validUntil;
+    if (validFrom !== undefined) {
+      let fromDate = new Date(validFrom);
+      if (typeof validFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(validFrom)) {
+        fromDate = new Date(`${validFrom}T00:00:00.000+05:30`);
+      } else if (!isNaN(fromDate.getTime())) {
+        fromDate.setHours(0, 0, 0, 0);
+      }
+      coupon.validFrom = fromDate;
+    }
+    if (validUntil !== undefined) {
+      let untilDate = new Date(validUntil);
+      if (typeof validUntil === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(validUntil)) {
+        untilDate = new Date(`${validUntil}T23:59:59.999+05:30`);
+      } else if (!isNaN(untilDate.getTime())) {
+        untilDate.setHours(23, 59, 59, 999);
+      }
+      coupon.validUntil = untilDate;
+    }
     if (isActive !== undefined) coupon.isActive = isActive;
-    if (applicableTo !== undefined) coupon.applicableTo = applicableTo;
+    if (applicableTo !== undefined) coupon.applicableTo = Array.isArray(applicableTo) ? applicableTo : [];
 
     const updatedCoupon = await coupon.save();
 
@@ -211,8 +241,12 @@ exports.validateCoupon = async (req, res) => {
     let applicableServiceIds = [];
     let totalDiscountAmount = 0;
 
-    // Check each service against coupon rules
-    for (const service of services) {
+    // If applicableTo is empty, coupon applies to all services
+    if (!coupon.applicableTo || coupon.applicableTo.length === 0) {
+      applicableServiceIds = services.map(s => s._id);
+    } else {
+      // Check each service against coupon rules
+      for (const service of services) {
         let isApplicable = false;
 
         // Check against each rule in applicableTo
@@ -236,6 +270,7 @@ exports.validateCoupon = async (req, res) => {
         if (isApplicable) {
             applicableServiceIds.push(service._id);
         }
+      }
     }
 
     if (applicableServiceIds.length === 0) {

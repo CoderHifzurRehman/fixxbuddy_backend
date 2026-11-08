@@ -57,7 +57,9 @@ const couponSchema = new mongoose.Schema(
 // Method to check if coupon is valid for a specific date
 couponSchema.methods.isValid = function() {
   const now = new Date();
-  return this.isActive && now >= this.validFrom && now <= this.validUntil;
+  const from = new Date(this.validFrom);
+  const until = new Date(this.validUntil);
+  return this.isActive && now >= from && now <= until;
 };
 
 const Coupon = mongoose.model('Coupon', couponSchema);

@@ -547,7 +547,9 @@ const updateCartItemStatus = async (req, res) => {
           // Logic similar to validateCoupon but for single item
           // We need to fetch applicationTypeId for the service
           // If service object is available
-          if (service) {
+          if (!coupon.applicableTo || coupon.applicableTo.length === 0) {
+            isApplicable = true;
+          } else if (service) {
             for (const rule of coupon.applicableTo) {
               if (service.applicationTypeId && service.applicationTypeId.toString() === rule.applicationTypeId.toString()) {
                 if (rule.serviceTypeIds.length === 0) {

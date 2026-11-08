@@ -55,7 +55,9 @@ const calculatePricing = async (serviceId, quantity = 1, couponCode = null, addi
     const coupon = await Coupon.findOne({ code: couponCode.toUpperCase() });
     if (coupon && coupon.isValid()) {
       let isApplicable = false;
-      if (service) {
+      if (!coupon.applicableTo || coupon.applicableTo.length === 0) {
+        isApplicable = true;
+      } else if (service) {
         for (const rule of coupon.applicableTo) {
           if (service.applicationTypeId && service.applicationTypeId.toString() === rule.applicationTypeId.toString()) {
             if (rule.serviceTypeIds.length === 0) {
