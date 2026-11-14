@@ -16,8 +16,10 @@ exports.createQuotation = async (req, res) => {
       return res.status(400).json({ message: 'Invalid request data', received: req.body });
     }
 
-    // items: [{ rateCardId, quantity }]
-    const rateCardIds = items.map(item => item.itemId);
+    // items: [{ itemId/rateCardId, quantity, name, price, type, isCustom }]
+    const rateCardIds = items
+      .map(item => item.itemId || item.rateCardId)
+      .filter(id => id && mongoose.isValidObjectId(id));
     const rateCards = await RateCard.find({ _id: { $in: rateCardIds } });
     
     // Create a map for easy lookup
@@ -30,23 +32,41 @@ exports.createQuotation = async (req, res) => {
     const quotationItems = [];
 
     for (const item of items) {
-      const rateCard = rateCardMap[item.itemId];
-      if (!rateCard) {
-        return res.status(404).json({ message: `Rate card item not found: ${item.itemId}` });
+      const standardId = (item.itemId || item.rateCardId)?.toString();
+      const rateCard = standardId ? rateCardMap[standardId] : null;
+
+      if (rateCard && !item.isCustom) {
+        const quantity = Number(item.quantity) || 1;
+        const itemTotal = rateCard.price * quantity;
+        
+        quotationItems.push({
+          rateCardId: rateCard._id,
+          name: rateCard.name,
+          price: rateCard.price,
+          quantity: quantity,
+          total: itemTotal,
+          type: rateCard.type || 'Part',
+          isCustom: false
+        });
+
+        totalAmount += itemTotal;
+      } else {
+        // Manual custom service or part added by partner
+        const quantity = Number(item.quantity) || 1;
+        const price = Number(item.price !== undefined ? item.price : item.cost) || 0;
+        const itemTotal = price * quantity;
+
+        quotationItems.push({
+          name: item.name || 'Custom Service/Part',
+          price: price,
+          quantity: quantity,
+          total: itemTotal,
+          type: item.type || 'Part',
+          isCustom: true
+        });
+
+        totalAmount += itemTotal;
       }
-
-      const quantity = item.quantity || 1;
-      const itemTotal = rateCard.price * quantity;
-      
-      quotationItems.push({
-        rateCardId: rateCard._id,
-        name: rateCard.name,
-        price: rateCard.price,
-        quantity: quantity,
-        total: itemTotal
-      });
-
-      totalAmount += itemTotal;
     }
 
     const newQuotation = new Quotation({
@@ -189,7 +209,9 @@ exports.updateQuotation = async (req, res) => {
 
     if (items && Array.isArray(items)) {
        // Logic to fetch rates and recalc
-       const rateCardIds = items.map(item => item.itemId);
+       const rateCardIds = items
+         .map(item => item.itemId || item.rateCardId)
+         .filter(id => id && mongoose.isValidObjectId(id));
        const rateCards = await RateCard.find({ _id: { $in: rateCardIds } });
        
        const rateCardMap = {};
@@ -201,23 +223,41 @@ exports.updateQuotation = async (req, res) => {
        const quotationItems = [];
 
        for (const item of items) {
-         const rateCard = rateCardMap[item.itemId];
-         if (!rateCard) {
-           return res.status(404).json({ message: `Rate card item not found: ${item.itemId}` });
+         const standardId = (item.itemId || item.rateCardId)?.toString();
+         const rateCard = standardId ? rateCardMap[standardId] : null;
+
+         if (rateCard && !item.isCustom) {
+           const quantity = Number(item.quantity) || 1;
+           const itemTotal = rateCard.price * quantity;
+           
+           quotationItems.push({
+             rateCardId: rateCard._id,
+             name: rateCard.name,
+             price: rateCard.price,
+             quantity: quantity,
+             total: itemTotal,
+             type: rateCard.type || 'Part',
+             isCustom: false
+           });
+
+           totalAmount += itemTotal;
+         } else {
+           // Manual custom service or part added by partner
+           const quantity = Number(item.quantity) || 1;
+           const price = Number(item.price !== undefined ? item.price : item.cost) || 0;
+           const itemTotal = price * quantity;
+
+           quotationItems.push({
+             name: item.name || 'Custom Service/Part',
+             price: price,
+             quantity: quantity,
+             total: itemTotal,
+             type: item.type || 'Part',
+             isCustom: true
+           });
+
+           totalAmount += itemTotal;
          }
-
-         const quantity = item.quantity || 1;
-         const itemTotal = rateCard.price * quantity;
-         
-         quotationItems.push({
-           rateCardId: rateCard._id,
-           name: rateCard.name,
-           price: rateCard.price,
-           quantity: quantity,
-           total: itemTotal
-         });
-
-         totalAmount += itemTotal;
        }
 
        quotation.items = quotationItems;

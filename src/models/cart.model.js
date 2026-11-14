@@ -271,6 +271,35 @@ const cartSchema = new mongoose.Schema(
       type: String,
       default: ""
     },
+    paymentCollected: {
+      type: Boolean,
+      default: false
+    },
+    paymentMode: {
+      type: String,
+      default: ""
+    },
+    paymentAmountCollected: {
+      type: Number,
+      default: 0
+    },
+    paymentCollectedAt: {
+      type: Date,
+      default: null
+    },
+    completionType: {
+      type: String,
+      enum: ['normal', 'quotation_rejected_base_only'],
+      default: 'normal'
+    },
+    completionReason: {
+      type: String,
+      default: ""
+    },
+    isVisitingChargeOnly: {
+      type: Boolean,
+      default: false
+    },
     isRated: {
       type: Boolean,
       default: false

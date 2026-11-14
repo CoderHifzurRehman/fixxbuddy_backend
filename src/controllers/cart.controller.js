@@ -387,47 +387,72 @@ const updateCartItemStatus = async (req, res) => {
         return res.status(400).json({ success: false, message: `Order is already ${existingCartItem.status}` });
       }
 
-      // Check remaining time before scheduled visit
-      let isWithinOneHour = false;
-      if (existingCartItem.scheduledDate) {
-        const visitTime = new Date(existingCartItem.scheduledDate);
-        if (existingCartItem.scheduledStartTime) {
-          const [h, m] = existingCartItem.scheduledStartTime.split(':').map(Number);
-          if (!isNaN(h)) {
-            visitTime.setHours(h, m || 0, 0, 0);
-          }
-        }
-        const diffMs = visitTime.getTime() - Date.now();
-        const diffHours = diffMs / (1000 * 60 * 60);
-        if (diffHours <= 1) {
-          isWithinOneHour = true;
-        }
-      }
-
       let cancellationFee = 0;
       let cancellationFeeAccepted = false;
+      let trackingMsg = '';
 
-      if (isWithinOneHour) {
-        if (!req.body.cancellationFeeAccepted) {
-          return res.status(400).json({
-            success: false,
-            feeRequired: true,
-            message: 'Partner visit is scheduled within 1 hour. A ₹100 cancellation fee applies and must be accepted to cancel.'
-          });
+      if (existingCartItem.otpVerified) {
+        // Customer cancels AFTER OTP verification (technician already on-site):
+        // Visiting charges will be charged, no extra quotation amount or cancellation fee
+        updateData.additionalItemsCost = 0;
+        updateData.quotationCost = 0;
+        const visitingCharge = existingCartItem.serviceCost || 199;
+        updateData.finalAmount = visitingCharge;
+        updateData.isVisitingChargeOnly = true;
+
+        trackingMsg = `Booking cancelled by customer after OTP verification. Visiting charges of ₹${visitingCharge} applied.`;
+      } else {
+        // Customer cancels BEFORE OTP verification:
+        // No visiting charges! Only cancellation fee if within 1 hour:
+        let isWithinOneHour = false;
+        if (existingCartItem.scheduledDate) {
+          const visitTime = new Date(existingCartItem.scheduledDate);
+          if (existingCartItem.scheduledStartTime) {
+            const [h, m] = existingCartItem.scheduledStartTime.split(':').map(Number);
+            if (!isNaN(h)) {
+              visitTime.setHours(h, m || 0, 0, 0);
+            }
+          }
+          const diffMs = visitTime.getTime() - Date.now();
+          const diffHours = diffMs / (1000 * 60 * 60);
+          if (diffHours <= 1) {
+            isWithinOneHour = true;
+          }
         }
-        cancellationFee = 100;
-        cancellationFeeAccepted = true;
-      }
 
-      const trackingMsg = isWithinOneHour
-        ? 'Booking cancelled by customer within 1 hour of scheduled visit. ₹100 cancellation fee applied (deducted from paid amount or added to next service).'
-        : 'Booking cancelled by customer before 1 hour of scheduled visit.';
+        if (isWithinOneHour) {
+          if (!req.body.cancellationFeeAccepted) {
+            return res.status(400).json({
+              success: false,
+              feeRequired: true,
+              message: 'Partner visit is scheduled within 1 hour. A ₹100 cancellation fee applies and must be accepted to cancel.'
+            });
+          }
+          cancellationFee = 100;
+          cancellationFeeAccepted = true;
+        }
+
+        updateData.additionalItemsCost = 0;
+        updateData.quotationCost = 0;
+        updateData.finalAmount = cancellationFee; // Zero visiting charges, only cancellation fee if any
+        updateData.isVisitingChargeOnly = false;
+
+        trackingMsg = isWithinOneHour
+          ? 'Booking cancelled by customer within 1 hour of scheduled visit. ₹100 cancellation fee applied. No visiting charges.'
+          : 'Booking cancelled by customer before 1 hour of scheduled visit. No visiting charges or cancellation fees charged.';
+      }
 
       updateData = {
         ...updateData,
         cancellationFee,
         cancellationFeeAccepted,
         cancelledAt: new Date(),
+        cancelledBy: {
+          role: 'customer',
+          id: req.user.id,
+          name: req.user.firstName || req.user.name || 'Customer'
+        },
+        cancellationReason: req.body.cancellationReason || req.body.reason || 'Cancelled by customer',
         $push: {
           tracking: {
             status: 'cancelled',

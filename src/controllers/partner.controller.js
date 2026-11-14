@@ -862,7 +862,16 @@ exports.verifyServiceOtp = async (req, res) => {
 exports.completeService = async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { notes, customerFeedback } = req.body;
+    const { 
+      notes, 
+      customerFeedback,
+      paymentCollected,
+      paymentMode,
+      paymentAmountCollected,
+      completionType,
+      completionReason,
+      isQuotationRejected
+    } = req.body;
     const partnerId = req.user.id;
 
     // Find the task
@@ -887,15 +896,43 @@ exports.completeService = async (req, res) => {
       });
     }
 
+    // Handle customer denied service / quotation rejected case:
+    // Generate bill for ONLY base amount or visiting charges, not any additional quotation amount
+    const isDeniedOrRejected = completionType === 'quotation_rejected_base_only' || isQuotationRejected;
+    if (isDeniedOrRejected) {
+      task.additionalItemsCost = 0;
+      task.quotationCost = 0;
+      task.completionType = 'quotation_rejected_base_only';
+      task.isVisitingChargeOnly = true;
+      task.completionReason = completionReason || notes || 'Customer rejected quotation / denied service';
+      task.calculateTotals();
+    } else {
+      task.completionType = 'normal';
+      task.isVisitingChargeOnly = false;
+    }
+
+    // Payment collection confirmation
+    const isPaid = paymentCollected === true || paymentCollected === 'true';
+    task.paymentCollected = isPaid;
+    task.paymentMode = paymentMode || (isPaid ? 'cash' : 'pending');
+    task.paymentAmountCollected = Number(paymentAmountCollected) || (isPaid ? task.finalAmount : 0);
+    if (isPaid) {
+      task.paymentCollectedAt = new Date();
+    }
+
     // Update task status to completed
     task.status = 'completed';
     task.completedAt = new Date();
-    task.serviceNotes = notes;
+    task.serviceNotes = notes || task.completionReason || '';
     task.customerFeedback = customerFeedback;
 
     // Add tracking entry
+    const trackingMsg = isDeniedOrRejected
+      ? `Service closed: Customer denied service / rejected quotation. Billed visiting/base charge: ₹${task.finalAmount}. Reason: "${task.completionReason}". Payment collected: ${isPaid ? 'Yes (' + task.paymentMode + ')' : 'No'}.`
+      : `Service completed successfully. Billed amount: ₹${task.finalAmount}. Payment collected: ${isPaid ? 'Yes (' + task.paymentMode + ')' : 'No'}.`;
+
     task.tracking.push({
-      message: 'Service completed successfully',
+      message: trackingMsg,
       status: 'completed',
       date: new Date(),
       type: 'completion'

@@ -4,7 +4,7 @@ const quotationItemSchema = new mongoose.Schema({
   rateCardId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'rateCard',
-    required: true,
+    required: false,
   },
   name: {
     type: String, // Snapshot of item name
@@ -23,6 +23,14 @@ const quotationItemSchema = new mongoose.Schema({
   total: {
     type: Number,
     required: true,
+  },
+  type: {
+    type: String,
+    default: 'Part',
+  },
+  isCustom: {
+    type: Boolean,
+    default: false,
   }
 });
 
