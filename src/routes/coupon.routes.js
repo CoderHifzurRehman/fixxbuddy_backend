@@ -18,6 +18,10 @@ router.put('/update/:id', [authMiddleware, authorizeRoles('admin', 'subadmin')],
 // Delete coupon (Admin only)
 router.delete('/:id', [authMiddleware, authorizeRoles('admin', 'subadmin')], couponController.deleteCoupon);
 
+// Get available coupons for customer cart (Public)
+router.get('/available', couponController.getAvailableCoupons);
+router.post('/available', couponController.getAvailableCoupons);
+
 // Validate coupon (Public)
 router.post('/validate', couponController.validateCoupon);
 

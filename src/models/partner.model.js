@@ -88,7 +88,7 @@ const partnerSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['ADMIN', 'SUBADMIN', 'MANAGER', 'TEAM_LEADER', 'PARTNER'],
+      enum: ['ADMIN', 'SUBADMIN', 'MANAGER', 'TEAM_LEADER', 'PARTNER', 'admin', 'subadmin', 'manager', 'team_leader', 'partner'],
       default: 'PARTNER',
       set: (val) => (val || 'PARTNER').toUpperCase(),
       get: (val) => (val || 'PARTNER').toUpperCase()
@@ -259,12 +259,32 @@ const partnerSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    deductions: [
+      {
+        amount: { type: Number, required: true },
+        reason: { type: String, default: '' },
+        cartItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Cart' },
+        orderId: { type: String, default: '' },
+        deductedAt: { type: Date, default: Date.now }
+      }
+    ],
+    totalDeductions: {
+      type: Number,
+      default: 0
+    },
   },
   {
     timestamps: true,
   }
 );
 
+
+partnerSchema.pre('validate', function (next) {
+  if (this.role) {
+    this.role = String(this.role).toUpperCase();
+  }
+  next();
+});
 
 partnerSchema.pre('save', function (next) {
   this.fullName = `${this.firstName} ${this.lastName}`.trim();

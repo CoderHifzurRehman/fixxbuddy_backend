@@ -23,13 +23,27 @@ exports.createCoupon = async (req, res) => {
       });
     }
 
+    let parsedValidFrom = validFrom ? new Date(validFrom) : new Date();
+    if (typeof validFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(validFrom)) {
+      parsedValidFrom = new Date(`${validFrom}T00:00:00.000+05:30`);
+    } else if (parsedValidFrom && !isNaN(parsedValidFrom.getTime())) {
+      parsedValidFrom.setHours(0, 0, 0, 0);
+    }
+
+    let parsedValidUntil = new Date(validUntil);
+    if (typeof validUntil === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(validUntil)) {
+      parsedValidUntil = new Date(`${validUntil}T23:59:59.999+05:30`);
+    } else if (parsedValidUntil && !isNaN(parsedValidUntil.getTime())) {
+      parsedValidUntil.setHours(23, 59, 59, 999);
+    }
+
     const newCoupon = new Coupon({
       code,
       discountPercentage,
       maxDiscountAmount,
-      validFrom,
-      validUntil,
-      applicableTo,
+      validFrom: parsedValidFrom,
+      validUntil: parsedValidUntil,
+      applicableTo: Array.isArray(applicableTo) ? applicableTo : [],
     });
 
     const savedCoupon = await newCoupon.save();
@@ -126,10 +140,26 @@ exports.updateCoupon = async (req, res) => {
     // Update fields (prevent updating code for simplicity/integrity)
     if (discountPercentage !== undefined) coupon.discountPercentage = discountPercentage;
     if (maxDiscountAmount !== undefined) coupon.maxDiscountAmount = maxDiscountAmount;
-    if (validFrom !== undefined) coupon.validFrom = validFrom;
-    if (validUntil !== undefined) coupon.validUntil = validUntil;
+    if (validFrom !== undefined) {
+      let fromDate = new Date(validFrom);
+      if (typeof validFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(validFrom)) {
+        fromDate = new Date(`${validFrom}T00:00:00.000+05:30`);
+      } else if (!isNaN(fromDate.getTime())) {
+        fromDate.setHours(0, 0, 0, 0);
+      }
+      coupon.validFrom = fromDate;
+    }
+    if (validUntil !== undefined) {
+      let untilDate = new Date(validUntil);
+      if (typeof validUntil === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(validUntil)) {
+        untilDate = new Date(`${validUntil}T23:59:59.999+05:30`);
+      } else if (!isNaN(untilDate.getTime())) {
+        untilDate.setHours(23, 59, 59, 999);
+      }
+      coupon.validUntil = untilDate;
+    }
     if (isActive !== undefined) coupon.isActive = isActive;
-    if (applicableTo !== undefined) coupon.applicableTo = applicableTo;
+    if (applicableTo !== undefined) coupon.applicableTo = Array.isArray(applicableTo) ? applicableTo : [];
 
     const updatedCoupon = await coupon.save();
 
@@ -211,8 +241,12 @@ exports.validateCoupon = async (req, res) => {
     let applicableServiceIds = [];
     let totalDiscountAmount = 0;
 
-    // Check each service against coupon rules
-    for (const service of services) {
+    // If applicableTo is empty, coupon applies to all services
+    if (!coupon.applicableTo || coupon.applicableTo.length === 0) {
+      applicableServiceIds = services.map(s => s._id);
+    } else {
+      // Check each service against coupon rules
+      for (const service of services) {
         let isApplicable = false;
 
         // Check against each rule in applicableTo
@@ -236,6 +270,7 @@ exports.validateCoupon = async (req, res) => {
         if (isApplicable) {
             applicableServiceIds.push(service._id);
         }
+      }
     }
 
     if (applicableServiceIds.length === 0) {
@@ -264,6 +299,137 @@ exports.validateCoupon = async (req, res) => {
     res.status(500).send({
       statusCode: 500,
       message: err.message || 'Error validating coupon.',
+    });
+  }
+};
+
+
+// Get Available Coupons for Customer Cart (Public)
+exports.getAvailableCoupons = async (req, res) => {
+  try {
+    const now = new Date();
+    const rawCartItems = req.body?.cartItems || req.query?.cartItems || [];
+    
+    let serviceIds = [];
+    if (Array.isArray(rawCartItems)) {
+      serviceIds = rawCartItems.map(item => {
+        if (typeof item === 'string') return item.trim();
+        if (item && item.serviceId) return typeof item.serviceId === 'string' ? item.serviceId : item.serviceId._id;
+        if (item && item._id) return item._id;
+        return item;
+      }).filter(Boolean);
+    } else if (typeof rawCartItems === 'string' && rawCartItems.trim()) {
+      serviceIds = rawCartItems.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    // Query active and valid coupons
+    const coupons = await Coupon.find({
+      isActive: true,
+      validFrom: { $lte: now },
+      validUntil: { $gte: now }
+    })
+    .populate('applicableTo.applicationTypeId', 'serviceName categoryName')
+    .populate('applicableTo.serviceTypeIds', 'serviceName serviceCost')
+    .sort({ discountPercentage: -1 });
+
+    let servicesInCart = [];
+    if (serviceIds.length > 0) {
+      servicesInCart = await ServiceType.find({ _id: { $in: serviceIds } }).populate('applicationTypeId', 'serviceName');
+    }
+
+    const availableCoupons = coupons.map(coupon => {
+      let isApplicable = false;
+      let applicableItemsCount = 0;
+      let matchingServiceNames = [];
+
+      if (servicesInCart.length > 0) {
+        for (const service of servicesInCart) {
+          let serviceMatches = false;
+          if (!coupon.applicableTo || coupon.applicableTo.length === 0) {
+            serviceMatches = true;
+          } else {
+            for (const rule of coupon.applicableTo) {
+              const ruleAppId = rule.applicationTypeId?._id?.toString() || rule.applicationTypeId?.toString();
+              const serviceAppId = service.applicationTypeId?._id?.toString() || service.applicationTypeId?.toString();
+
+              if (ruleAppId && serviceAppId && ruleAppId === serviceAppId) {
+                if (!rule.serviceTypeIds || rule.serviceTypeIds.length === 0) {
+                  serviceMatches = true;
+                } else {
+                  const ruleServiceIds = rule.serviceTypeIds.map(st => (st._id || st).toString());
+                  if (ruleServiceIds.includes(service._id.toString())) {
+                    serviceMatches = true;
+                  }
+                }
+              }
+              if (serviceMatches) break;
+            }
+          }
+
+          if (serviceMatches) {
+            applicableItemsCount++;
+            matchingServiceNames.push(service.serviceName);
+          }
+        }
+        isApplicable = applicableItemsCount > 0;
+      } else {
+        // If cart is empty, all valid coupons are considered generally available
+        isApplicable = true;
+      }
+
+      // Readable category scope
+      let scopeText = 'All Home Services';
+      if (coupon.applicableTo && coupon.applicableTo.length > 0) {
+        const catNames = coupon.applicableTo
+          .map(r => r.applicationTypeId?.serviceName || r.applicationTypeId?.categoryName)
+          .filter(Boolean);
+        const uniqueCats = [...new Set(catNames)];
+        if (uniqueCats.length === 1) {
+          scopeText = `${uniqueCats[0]} Services`;
+        } else if (uniqueCats.length > 1 && uniqueCats.length <= 3) {
+          scopeText = uniqueCats.join(', ');
+        } else if (uniqueCats.length > 3) {
+          scopeText = `${uniqueCats.slice(0, 2).join(', ')} & more`;
+        }
+      }
+
+      const discountSummary = coupon.maxDiscountAmount 
+        ? `${coupon.discountPercentage}% OFF up to ₹${coupon.maxDiscountAmount}` 
+        : `${coupon.discountPercentage}% OFF`;
+
+      return {
+        _id: coupon._id,
+        code: coupon.code,
+        discountPercentage: coupon.discountPercentage,
+        maxDiscountAmount: coupon.maxDiscountAmount,
+        discountSummary,
+        validUntil: coupon.validUntil,
+        scopeText,
+        isApplicable,
+        matchingServiceNames: [...new Set(matchingServiceNames)]
+      };
+    });
+
+    // Sort: applicable coupons first, then by discount percentage descending
+    availableCoupons.sort((a, b) => {
+      if (a.isApplicable && !b.isApplicable) return -1;
+      if (!a.isApplicable && b.isApplicable) return 1;
+      return b.discountPercentage - a.discountPercentage;
+    });
+
+    res.status(200).json({
+      statusCode: 200,
+      success: true,
+      message: 'Available coupons retrieved successfully.',
+      count: availableCoupons.length,
+      data: availableCoupons
+    });
+  } catch (err) {
+    console.error('Error fetching available coupons:', err);
+    res.status(500).json({
+      statusCode: 500,
+      success: false,
+      message: err.message || 'Error fetching available coupons.'
     });
   }
 };

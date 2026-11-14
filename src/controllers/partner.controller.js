@@ -529,10 +529,15 @@ exports.getPartnerDashboard = async (req, res) => {
     // Fetch partner data
     const partner = await Partner.findById(partnerId);
 
-    // Get all tasks assigned to this partner
+    // Get all tasks assigned to this partner (including warranty claims assigned to this partner)
     const tasks = await Cart.find({
-      assignedPartner: partnerId
-    }).populate('userId', 'name email firstName lastName')
+      $or: [
+        { assignedPartner: partnerId },
+        { 'warrantyClaim.assignedPartner': partnerId }
+      ]
+    }).populate('userId', 'name email firstName lastName contactNumbers phone deliveryAddress')
+      .populate('assignedPartner', 'firstName lastName fullName contactNumber phone email')
+      .populate('warrantyClaim.assignedPartner', 'firstName lastName fullName contactNumber phone email')
       .sort({ createdAt: -1 });
 
     // Calculate earnings from completed tasks
@@ -550,6 +555,8 @@ exports.getPartnerDashboard = async (req, res) => {
       const taskObj = task.toObject();
       // Find quotation for this task (matching custom orderId string)
       taskObj.quotation = quotations.find(q => (task.orderId && q.orderId === task.orderId) || (task._id && q.orderId === task._id.toString()) || (task.quotationId && q._id.toString() === task.quotationId.toString()));
+      const finalCost = task.finalAmount || (task.serviceCost * (task.quantity || 1)) || 0;
+      taskObj.previousPartnerEarnings = Math.round(finalCost * 0.70);
       return taskObj;
     });
 
@@ -1637,5 +1644,284 @@ exports.saveFcmToken = async (req, res) => {
   } catch (error) {
     console.error("Error saving partner FCM token:", error);
     return res.status(500).json({ success: false, message: "Server error saving FCM token", error: error.message });
+  }
+};
+
+// @desc Partner actions on assigned warranty claim
+// @route PATCH /api/partners/warranty-claim/:cartItemId
+exports.handlePartnerWarrantyClaimAction = async (req, res) => {
+  try {
+    const partnerId = req.user?.id || req.user?._id;
+    const { cartItemId } = req.params;
+    const {
+      action, // 'start', 'complete', 'assess_repair', 'reject'
+      resolutionNotes,
+      estimatedRepairCost,
+      notRepairable,
+      reason,
+      notes
+    } = req.body;
+
+    const cartItem = await Cart.findById(cartItemId)
+      .populate('userId', 'fullName firstName lastName email contactNumbers phone')
+      .populate('assignedPartner', 'firstName lastName fullName contactNumber phone email')
+      .populate('warrantyClaim.assignedPartner', 'firstName lastName fullName contactNumber phone email');
+
+    if (!cartItem) {
+      return res.status(404).json({ success: false, message: 'Service order not found' });
+    }
+
+    if (!cartItem.warrantyClaim || !cartItem.warrantyClaim.claimed) {
+      return res.status(400).json({ success: false, message: 'No active warranty claim on this service item' });
+    }
+
+    // Verify assigned partner
+    const assignedClaimPartner = cartItem.warrantyClaim.assignedPartner?._id?.toString() || cartItem.warrantyClaim.assignedPartner?.toString();
+    const originalPartnerId = cartItem.assignedPartner?._id?.toString() || cartItem.assignedPartner?.toString();
+
+    if (assignedClaimPartner !== partnerId.toString() && originalPartnerId !== partnerId.toString()) {
+      return res.status(403).json({ success: false, message: 'You are not assigned to this warranty claim' });
+    }
+
+    const partnerObj = await Partner.findById(partnerId);
+    const partnerName = partnerObj ? (partnerObj.fullName || `${partnerObj.firstName || ''} ${partnerObj.lastName || ''}`.trim()) : 'Technician';
+
+    // Original partner earnings calculation (70% share)
+    const baseServiceCost = cartItem.finalAmount || (cartItem.serviceCost * (cartItem.quantity || 1)) || 0;
+    const previousPartnerEarnings = Math.round(baseServiceCost * 0.70);
+    const prevPartnerName = cartItem.assignedPartner ? (cartItem.assignedPartner.fullName || `${cartItem.assignedPartner.firstName || ''} ${cartItem.assignedPartner.lastName || ''}`.trim()) : 'Previous Technician';
+
+    if (action === 'start') {
+      cartItem.warrantyClaim.status = 'inProgress';
+      cartItem.tracking.unshift({
+        message: `Warranty claim inspection & repair started by technician (${partnerName})`,
+        date: new Date(),
+        status: 'warranty_inProgress'
+      });
+
+      await cartItem.save();
+
+      try {
+        ably.channels.get("admin-channel").publish("task_updated", {
+          message: `Warranty claim in progress by partner ${partnerName}`,
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'inProgress'
+        });
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'inProgress'
+        });
+      } catch (e) {
+        console.warn('Ably error:', e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Warranty claim work started successfully',
+        data: cartItem
+      });
+    }
+
+    if (action === 'complete') {
+      cartItem.warrantyClaim.status = 'completed';
+      cartItem.warrantyClaim.resolvedAt = new Date();
+      cartItem.warrantyClaim.resolutionNotes = resolutionNotes || notes || 'Warranty service issue resolved by technician';
+
+      cartItem.tracking.unshift({
+        message: `Warranty claim resolved & completed: ${cartItem.warrantyClaim.resolutionNotes}`,
+        date: new Date(),
+        status: 'warrantyResolved'
+      });
+
+      await cartItem.save();
+
+      try {
+        ably.channels.get("admin-channel").publish("task_updated", {
+          message: `Warranty claim resolved by partner ${partnerName}`,
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'completed'
+        });
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'completed'
+        });
+      } catch (e) {
+        console.warn('Ably error:', e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Warranty claim marked as resolved and completed',
+        data: cartItem
+      });
+    }
+
+    if (action === 'assess_repair') {
+      const repairCost = Number(estimatedRepairCost) || 0;
+      const isIrreparable = Boolean(notRepairable);
+      const assessmentNotes = (notes || reason || '').trim();
+
+      // Case 1: Repairable AND Repair Cost <= Previous Partner's Earnings
+      if (!isIrreparable && repairCost > 0 && repairCost <= previousPartnerEarnings) {
+        cartItem.warrantyClaim.estimatedRepairCost = repairCost;
+        cartItem.warrantyClaim.deductionAmount = repairCost;
+        cartItem.warrantyClaim.isDeductedFromPreviousPartner = true;
+        cartItem.warrantyClaim.previousPartner = originalPartnerId || null;
+        cartItem.warrantyClaim.previousPartnerEarnings = previousPartnerEarnings;
+        cartItem.warrantyClaim.inspectionNotes = assessmentNotes;
+        cartItem.warrantyClaim.status = 'inProgress';
+
+        // Apply deduction to previous partner's record
+        if (originalPartnerId) {
+          await Partner.findByIdAndUpdate(originalPartnerId, {
+            $push: {
+              deductions: {
+                amount: repairCost,
+                reason: `Warranty repair deduction for Order #${cartItem.orderId || cartItem._id}: ${assessmentNotes || 'Defect within warranty period'}`,
+                cartItemId: cartItem._id,
+                orderId: cartItem.orderId || cartItem._id.toString(),
+                deductedAt: new Date()
+              }
+            },
+            $inc: { totalDeductions: repairCost }
+          });
+        }
+
+        cartItem.tracking.unshift({
+          message: `Repair assessment submitted: Estimated cost of ₹${repairCost} is under previous technician's profit (₹${previousPartnerEarnings}). Deducted ₹${repairCost} from ${prevPartnerName}. Proceeding with warranty repair.`,
+          date: new Date(),
+          status: 'warrantyDeductionApplied'
+        });
+
+        await cartItem.save();
+
+        try {
+          ably.channels.get("admin-channel").publish("task_updated", {
+            message: `Repair assessment: ₹${repairCost} deducted from previous technician for ${cartItem.serviceName}`,
+            taskId: cartItem._id,
+            orderId: cartItem.orderId
+          });
+          ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+            taskId: cartItem._id,
+            orderId: cartItem.orderId,
+            status: 'inProgress'
+          });
+        } catch (e) {
+          console.warn('Ably error:', e.message);
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: `Repair cost of ₹${repairCost} deducted from previous technician (${prevPartnerName}) profit. You may proceed with repair.`,
+          data: cartItem
+        });
+      }
+
+      // Case 2: Not Repairable OR Repair Cost > Previous Partner's Earnings -> Initiate Refund!
+      const refundAmount = cartItem.finalAmount || (cartItem.serviceCost * (cartItem.quantity || 1)) || 0;
+      const notRepairableReason = isIrreparable
+        ? (assessmentNotes || 'Unit damaged beyond repair / Irreparable defect')
+        : `Repair cost (₹${repairCost}) exceeds previous technician profit (₹${previousPartnerEarnings}). ${assessmentNotes}`.trim();
+
+      cartItem.warrantyClaim.status = 'refund_initiated';
+      cartItem.warrantyClaim.notRepairable = true;
+      cartItem.warrantyClaim.notRepairableReason = notRepairableReason;
+      cartItem.warrantyClaim.estimatedRepairCost = repairCost;
+      cartItem.warrantyClaim.previousPartnerEarnings = previousPartnerEarnings;
+      cartItem.warrantyClaim.previousPartner = originalPartnerId || null;
+      cartItem.warrantyClaim.inspectionNotes = assessmentNotes;
+      cartItem.warrantyClaim.refundStatus = 'initiated';
+      cartItem.warrantyClaim.refundAmount = refundAmount;
+      cartItem.warrantyClaim.refundInitiatedBy = partnerId;
+      cartItem.warrantyClaim.refundInitiatedAt = new Date();
+
+      cartItem.tracking.unshift({
+        message: `Warranty claim assessed by technician (${partnerName}): Marked NOT REPAIRABLE (${notRepairableReason}). Customer refund of ₹${refundAmount} initiated for Management approval.`,
+        date: new Date(),
+        status: 'warrantyRefundInitiated'
+      });
+
+      await cartItem.save();
+
+      // Trigger Ably event for Admin, Manager & Team Leader
+      try {
+        const payload = {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          serviceName: cartItem.serviceName,
+          customerName: cartItem.userId?.firstName ? `${cartItem.userId.firstName} ${cartItem.userId.lastName || ''}`.trim() : 'Customer',
+          partnerName,
+          previousPartnerName: prevPartnerName,
+          refundAmount,
+          reason: notRepairableReason,
+          notes: assessmentNotes,
+          timestamp: new Date()
+        };
+
+        ably.channels.get("admin-channel").publish("warranty_refund_initiated", payload);
+        ably.channels.get("admin-channel").publish("task_updated", {
+          message: `Refund initiated for Order #${cartItem.orderId}: ₹${refundAmount} (Not Repairable)`,
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'refund_initiated'
+        });
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", payload);
+      } catch (e) {
+        console.warn('Ably error:', e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Claim marked as Not Repairable. Customer refund of ₹${refundAmount} initiated for Admin & Manager review.`,
+        data: cartItem
+      });
+    }
+
+    if (action === 'reject') {
+      const declineReason = (reason || notes || 'Partner unable to attend warranty claim').trim();
+      cartItem.warrantyClaim.status = 'pending';
+      cartItem.warrantyClaim.assignedPartner = null;
+
+      cartItem.tracking.unshift({
+        message: `Technician (${partnerName}) declined warranty claim: ${declineReason}. Returned to pending queue.`,
+        date: new Date(),
+        status: 'warrantyPartnerDeclined'
+      });
+
+      await cartItem.save();
+
+      try {
+        ably.channels.get("admin-channel").publish("task_updated", {
+          message: `Technician declined warranty claim: ${declineReason}`,
+          taskId: cartItem._id,
+          orderId: cartItem.orderId
+        });
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'pending'
+        });
+      } catch (e) {
+        console.warn('Ably error:', e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Warranty claim declined and returned to queue',
+        data: cartItem
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid action. Supported: start, complete, assess_repair, reject'
+    });
+  } catch (error) {
+    console.error('Error handling partner warranty claim action:', error);
+    res.status(500).json({ success: false, message: 'Server error processing claim action', error: error.message });
   }
 };

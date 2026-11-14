@@ -58,4 +58,6 @@ router.patch('/tasks/:taskId/status', authMiddleware, partnerController.updateSe
 router.patch('/tasks/:taskId/reschedule', authMiddleware, partnerController.rescheduleTask);
 router.post('/tasks/:taskId/upload-images', authMiddleware, upload.array('images', 10), partnerController.uploadServiceImages);
 
+router.patch('/warranty-claim/:cartItemId', authMiddleware, partnerController.handlePartnerWarrantyClaimAction);
+
 module.exports = router;

@@ -2,7 +2,7 @@ const bcrypt = require("bcryptjs");
 const { sendEmail } = require("../config/email");
 const User = require("../models/user.model");
 const { generateToken } = require("../utils/jwt");
-const { otpMailTemplate, forgotPasswordMailTemplate } = require("../utils/mailingFunction");
+const { otpMailTemplate, forgotPasswordMailTemplate, userTermsAcceptedMailTemplate } = require("../utils/mailingFunction");
 const {
   uploadSingleImageToS3,
   uploadMultipleImagesToS3,
@@ -26,17 +26,45 @@ const validatePasswordStrength = (password) => {
 
 exports.userRegistration = async (req, res) => {
   try {
-    const { firstName, lastName, email, password } = req.body;
+    const { firstName, lastName, email, password, termsAccepted } = req.body;
+
+    let firstNameVal = (firstName || '').trim();
+    let lastNameVal = (lastName !== undefined && lastName !== null) ? String(lastName).trim() : '';
+
+    if (!firstNameVal && req.body.name) {
+      const parts = String(req.body.name).trim().split(/\s+/);
+      firstNameVal = parts[0] || '';
+      lastNameVal = parts.slice(1).join(' ') || '';
+    } else if (!firstNameVal && req.body.fullName) {
+      const parts = String(req.body.fullName).trim().split(/\s+/);
+      firstNameVal = parts[0] || '';
+      lastNameVal = parts.slice(1).join(' ') || '';
+    }
+
+    if (!firstNameVal) {
+      return res.status(400).send({
+        statusCode: 400,
+        message: "First name is required."
+      });
+    }
+
+    const isTermsAccepted = termsAccepted === true || termsAccepted === 'true';
+    if (!isTermsAccepted) {
+      return res.status(400).send({
+        statusCode: 400,
+        message: "You must accept the Terms and Conditions to create an account."
+      });
+    }
+
+    const ipAddress = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || '';
+    const userAgent = req.headers['user-agent'] || '';
 
     const { file } = req;
     let imageUrl = "";
     
     if (file) {
-      const folderName = `user/profilePic/${email}`; // Customize the folder name if needed
-      // console.log(folderName);
-
+      const folderName = `user/profilePic/${email}`;
       imageUrl = await uploadSingleImageToS3(file, folderName);
-      // console.log(imageUrl);
     }
 
     const existingUser = await User.findOne({ email });
@@ -56,29 +84,52 @@ exports.userRegistration = async (req, res) => {
       });
     }
 
-    // Proceed to create a new user
+    const calculatedFullName = [firstNameVal, lastNameVal].filter(Boolean).join(' ') || firstNameVal;
+
+    // Proceed to create a new user with terms acceptance
     const newUser = new User({
-      firstName,
-      lastName,
+      firstName: firstNameVal,
+      lastName: lastNameVal,
+      fullName: calculatedFullName,
       email,
       imageUrl,
       password,
+      termsAccepted: true,
+      termsAcceptedAt: new Date(),
+      termsAcceptedIp: ipAddress,
+      termsAcceptedUserAgent: userAgent
     });
 
     // Save the new user to the database
     const savedUser = await newUser.save();
 
-    // Generate a token (Make sure you have the token generation logic)
-    const token = generateToken(savedUser); // Example function, replace with actual
+    // Send terms acceptance confirmation email
+    try {
+      const subject = "Terms and Conditions Accepted - Fixxbuddy";
+      const userDataForEmail = {
+        name: savedUser.fullName || [savedUser.firstName, savedUser.lastName].filter(Boolean).join(' ') || savedUser.firstName || 'Customer',
+        date: savedUser.termsAcceptedAt,
+        ipAddress: ipAddress
+      };
+      await sendEmail(subject, savedUser.email, userTermsAcceptedMailTemplate(userDataForEmail));
+    } catch (emailError) {
+      console.error("Error sending terms accepted email:", emailError);
+    }
+
+    // Generate a token
+    const token = generateToken(savedUser);
     const sendData = {
       firstName: savedUser?.firstName,
-      lastName: savedUser?.lastName,
+      lastName: savedUser?.lastName || "",
+      fullName: savedUser?.fullName || savedUser?.firstName || "",
       email: savedUser?.email,
       imageUrl,
       role: savedUser?.role,
       isActive: savedUser?.isActive,
       isEmailVerified: savedUser?.isEmailVerified,
       profilePic: savedUser?.profilePic,
+      termsAccepted: savedUser?.termsAccepted,
+      termsAcceptedAt: savedUser?.termsAcceptedAt
     };
 
     res.status(201).send({
@@ -280,8 +331,13 @@ exports.updateUserProfile = async (req, res) => {
     }
 
     // Update user fields
-    user.firstName = firstName || user.firstName;
-    user.lastName = lastName || user.lastName;
+    if (firstName !== undefined && firstName !== null) {
+      user.firstName = firstName.trim();
+    }
+    if (lastName !== undefined && lastName !== null) {
+      user.lastName = lastName.trim();
+    }
+    user.fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.firstName || '';
     user.imageUrl = imageUrl;
 
     // Save the updated user document
@@ -748,3 +804,59 @@ exports.saveFcmToken = async (req, res) => {
   }
 };
 
+
+// @desc    Accept terms and conditions for authenticated user
+// @route   POST /api/users/accept-terms
+// @access  Private
+exports.acceptTerms = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const ipAddress = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || '';
+    const userAgent = req.headers['user-agent'] || '';
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          termsAccepted: true,
+          termsAcceptedAt: new Date(),
+          termsAcceptedIp: ipAddress,
+          termsAcceptedUserAgent: userAgent
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    try {
+      const subject = "Terms and Conditions Accepted - Fixxbuddy";
+      const userDataForEmail = {
+        name: updatedUser.fullName || [updatedUser.firstName, updatedUser.lastName].filter(Boolean).join(' ') || updatedUser.firstName || 'Customer',
+        date: updatedUser.termsAcceptedAt,
+        ipAddress: ipAddress
+      };
+      await sendEmail(subject, updatedUser.email, userTermsAcceptedMailTemplate(userDataForEmail));
+    } catch (emailError) {
+      console.error("Error sending terms accepted email:", emailError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Terms and conditions accepted successfully',
+      data: {
+        termsAccepted: updatedUser.termsAccepted,
+        termsAcceptedAt: updatedUser.termsAcceptedAt
+      }
+    });
+  } catch (error) {
+    console.error('Accept terms error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error accepting terms and conditions',
+      error: error.message
+    });
+  }
+};

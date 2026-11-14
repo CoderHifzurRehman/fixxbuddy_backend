@@ -72,6 +72,12 @@ const userSchema = new mongoose.Schema(
     lastName: {
       type: String,
       trim: true,
+      default: "",
+    },
+    fullName: {
+      type: String,
+      trim: true,
+      default: "",
     },
     email: {
       type: String,
@@ -109,10 +115,26 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
-    fcmToken: {
+        fcmToken: {
       type: String,
       default: null,
       trim: true,
+    },
+    termsAccepted: {
+      type: Boolean,
+      default: false
+    },
+    termsAcceptedAt: {
+      type: Date,
+      default: null
+    },
+    termsAcceptedIp: {
+      type: String,
+      default: null
+    },
+    termsAcceptedUserAgent: {
+      type: String,
+      default: null
     },
     addresses: [addressSchema],
     contactNumbers: [contactNumberSchema],
@@ -121,6 +143,12 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Pre-save hook to maintain fullName
+userSchema.pre('save', function(next) {
+  this.fullName = [this.firstName, this.lastName].filter(Boolean).join(' ') || this.firstName || '';
+  next();
+});
 
 // Middleware to ensure only one primary address exists
 userSchema.pre('save', function(next) {
@@ -158,6 +186,12 @@ userSchema.pre("save", async function (next) {
 userSchema.methods.comparePassword = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
+
+
+// Virtual for fullName
+userSchema.virtual('derivedFullName').get(function() {
+  return [this.firstName, this.lastName].filter(Boolean).join(' ') || this.firstName || '';
+});
 
 const User = mongoose.model('user', userSchema);
 

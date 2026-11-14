@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 
 const serviceTypeSchema = new mongoose.Schema(
   {
-    applicationTypeId:{
+    applicationTypeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "applicationType"
     },
@@ -17,32 +17,32 @@ const serviceTypeSchema = new mongoose.Schema(
       trim: true,
     },
     serviceDescription: {
-        type: String,
-        trim: true,
-        default:''
+      type: String,
+      trim: true,
+      default: ''
     },
     serviceCost: {
-        type: String,
-        trim: true,
-        default:''
+      type: String,
+      trim: true,
+      default: ''
     },
     serviceDetails: {
-        type: String,
-        trim: true,
-        default:''
+      type: String,
+      trim: true,
+      default: ''
     },   
     serviceVideoLink: {
-        type: String,
-        trim: true,
-        default:''
+      type: String,
+      trim: true,
+      default: ''
     },   
     isActive: {
-      type:Boolean,
-      default:true,
+      type: Boolean,
+      default: true,
     },
-    serviceImage:{
-      type:[String],
-      default:"",
+    serviceImage: {
+      type: [String],
+      default: [],
     },
     discountPercentage: {
       type: Number,
@@ -68,7 +68,28 @@ const serviceTypeSchema = new mongoose.Schema(
       type: Number,
       default: 3,
       min: 0
-    }
+    },
+    averageRating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5
+    },
+    totalRatings: {
+      type: Number,
+      default: 0
+    },
+    ratings: [
+      {
+        cartId: { type: mongoose.Schema.Types.ObjectId, ref: 'Cart' },
+        orderId: { type: String, default: '' },
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'user' },
+        userName: { type: String, default: 'Customer' },
+        rating: { type: Number, required: true, min: 1, max: 5 },
+        feedback: { type: String, default: '' },
+        createdAt: { type: Date, default: Date.now }
+      }
+    ]
   },
   {
     timestamps: true,

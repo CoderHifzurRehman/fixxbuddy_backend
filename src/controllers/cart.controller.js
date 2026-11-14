@@ -412,7 +412,7 @@ const updateCartItemStatus = async (req, res) => {
           return res.status(400).json({
             success: false,
             feeRequired: true,
-            message: 'Partner visit is scheduled within 1 hour. A â‚¹100 cancellation fee applies and must be accepted to cancel.'
+            message: 'Partner visit is scheduled within 1 hour. A ₹100 cancellation fee applies and must be accepted to cancel.'
           });
         }
         cancellationFee = 100;
@@ -420,7 +420,7 @@ const updateCartItemStatus = async (req, res) => {
       }
 
       const trackingMsg = isWithinOneHour
-        ? 'Booking cancelled by customer within 1 hour of scheduled visit. â‚¹100 cancellation fee applied (deducted from paid amount or added to next service).'
+        ? 'Booking cancelled by customer within 1 hour of scheduled visit. ₹100 cancellation fee applied (deducted from paid amount or added to next service).'
         : 'Booking cancelled by customer before 1 hour of scheduled visit.';
 
       updateData = {
@@ -547,7 +547,9 @@ const updateCartItemStatus = async (req, res) => {
           // Logic similar to validateCoupon but for single item
           // We need to fetch applicationTypeId for the service
           // If service object is available
-          if (service) {
+          if (!coupon.applicableTo || coupon.applicableTo.length === 0) {
+            isApplicable = true;
+          } else if (service) {
             for (const rule of coupon.applicableTo) {
               if (service.applicationTypeId && service.applicationTypeId.toString() === rule.applicationTypeId.toString()) {
                 if (rule.serviceTypeIds.length === 0) {
@@ -712,6 +714,9 @@ const getAllUsersDetails = async (req, res) => {
       limit = 10,
       status,
       search,
+      service,
+      fromDate,
+      toDate,
       sortBy = 'requestedDate', // New: added sorting
       sortOrder = 'desc' // New: added sort order
     } = req.query;
@@ -727,9 +732,28 @@ const getAllUsersDetails = async (req, res) => {
       }
     }
 
-    // First get all requests with user data that match the status filter
+    if (service && service !== 'all') {
+      requestQuery.serviceName = { $regex: new RegExp(`^${service}$`, 'i') };
+    }
+
+    if (fromDate || toDate) {
+      const dateFilter = {};
+      if (fromDate) dateFilter.$gte = new Date(fromDate);
+      if (toDate) {
+        const to = new Date(toDate);
+        to.setHours(23, 59, 59, 999);
+        dateFilter.$lte = to;
+      }
+      requestQuery.$or = [
+        { createdAt: dateFilter },
+        { updatedAt: dateFilter },
+        { scheduledDate: dateFilter }
+      ];
+    }
+
+    // First get all requests with user data that match the status and filter criteria
     const requests = await Cart.find(requestQuery)
-      .populate('userId', 'firstName lastName email contactNumbers')
+      .populate('userId', 'firstName lastName email contactNumbers phone')
       .sort({ createdAt: -1 }) // Sort requests by creation date
       .lean();
 
@@ -858,6 +882,15 @@ const getAllUsersDetails = async (req, res) => {
       hasWarrantyClaim: (userData.warrantyClaimsCount || 0) > 0
     }));
 
+    // Fetch unique services list for filter dropdown
+    let availableServices = [];
+    try {
+      availableServices = await Cart.distinct('serviceName');
+      availableServices = availableServices.filter(Boolean).sort();
+    } catch (e) {
+      console.warn('Could not fetch distinct service names:', e.message);
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -866,7 +899,8 @@ const getAllUsersDetails = async (req, res) => {
         currentPage: parseInt(page),
         totalPages: Math.ceil(totalCount / limit),
         sortBy,
-        sortOrder
+        sortOrder,
+        availableServices
       }
     });
   } catch (error) {
@@ -883,15 +917,69 @@ const getAllUsersDetails = async (req, res) => {
 const getUserRequests = async (req, res) => {
   try {
     const userId = req.params.userId;
+    const { sortBy, sortOrder, status, fromDate, toDate, service } = req.query;
 
-    const requests = await Cart.find({
-      userId: userId,
-    }).populate('serviceId', 'serviceName serviceCost description deliveryAddress contactNumber')
-      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise').populate('warrantyClaim.assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise');
+    const filter = { userId: userId };
+
+    if (status && status !== 'all') {
+      if (status === 'warrantyClaims') {
+        filter['warrantyClaim.claimed'] = true;
+      } else {
+        filter.status = status;
+      }
+    }
+
+    if (service && service !== 'all') {
+      filter.serviceName = { $regex: new RegExp(`^${service}$`, 'i') };
+    }
+
+    if (fromDate || toDate) {
+      filter.$or = [
+        {
+          updatedAt: {
+            ...(fromDate ? { $gte: new Date(fromDate) } : {}),
+            ...(toDate ? { $lte: new Date(new Date(toDate).setHours(23, 59, 59, 999)) } : {})
+          }
+        },
+        {
+          scheduledDate: {
+            ...(fromDate ? { $gte: new Date(fromDate) } : {}),
+            ...(toDate ? { $lte: new Date(new Date(toDate).setHours(23, 59, 59, 999)) } : {})
+          }
+        }
+      ];
+    }
+
+    let sort = { updatedAt: -1 };
+    if (sortBy) {
+      const order = sortOrder === 'asc' ? 1 : -1;
+      if (sortBy === 'requestedDate' || sortBy === 'updatedAt') sort = { updatedAt: order };
+      else if (sortBy === 'createdAt') sort = { createdAt: order };
+      else if (sortBy === 'scheduledDate') sort = { scheduledDate: order };
+      else if (sortBy === 'serviceCost' || sortBy === 'amount') sort = { finalAmount: order, serviceCost: order };
+      else if (sortBy === 'serviceName') sort = { serviceName: order };
+      else if (sortBy === 'status') sort = { status: order };
+    }
+
+    const requests = await Cart.find(filter)
+      .populate('userId', 'firstName lastName fullName email contactNumbers phone addresses')
+      .populate('serviceId', 'serviceName serviceCost description deliveryAddress contactNumber')
+      .populate('assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise profilePic averageRating totalRatings')
+      .populate('warrantyClaim.assignedPartner', 'fullName contactNumber emergencyContactNumber email expertise profilePic')
+      .sort(sort);
+
+    let userObj = null;
+    try {
+      const User = require('../models/user.model');
+      userObj = await User.findById(userId).select('firstName lastName fullName email contactNumbers phone addresses');
+    } catch (e) {
+      console.warn('Could not fetch user by ID:', e.message);
+    }
 
     res.status(200).json({
       success: true,
-      data: requests
+      data: requests,
+      user: userObj || requests[0]?.userId || null
     });
   } catch (error) {
     console.error('Error fetching user requests:', error);
@@ -1377,19 +1465,42 @@ const checkCartServiceability = async (req, res) => {
 };
 
 
-// @desc    Rate partner and add optional feedback for completed order
+// @desc    Rate service and partner for completed order (prevents duplicate ratings per booking)
 // @route   POST /api/cart/:cartItemId/rate
 // @access  Private
 const ratePartner = async (req, res) => {
   try {
     const { cartItemId } = req.params;
-    const { rating, feedback } = req.body;
+    const {
+      serviceRating,
+      serviceFeedback,
+      partnerRating,
+      partnerFeedback,
+      rating,
+      feedback
+    } = req.body;
 
-    const numericRating = Number(rating);
-    if (!numericRating || numericRating < 1 || numericRating > 5) {
+    const numServiceRating = serviceRating ? Number(serviceRating) : null;
+    const numPartnerRating = partnerRating ? Number(partnerRating) : (rating ? Number(rating) : null);
+
+    if (!numServiceRating && !numPartnerRating) {
       return res.status(400).json({
         success: false,
-        message: 'Rating must be a number between 1 and 5'
+        message: 'Please provide a rating (1 to 5 stars) for either the service or partner'
+      });
+    }
+
+    if (numServiceRating && (numServiceRating < 1 || numServiceRating > 5)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Service rating must be a number between 1 and 5'
+      });
+    }
+
+    if (numPartnerRating && (numPartnerRating < 1 || numPartnerRating > 5)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Partner rating must be a number between 1 and 5'
       });
     }
 
@@ -1415,88 +1526,173 @@ const ratePartner = async (req, res) => {
       });
     }
 
-    if (!cartItem.assignedPartner) {
-      return res.status(400).json({
-        success: false,
-        message: 'No partner assigned to this order'
-      });
-    }
-
-    const partnerId = cartItem.assignedPartner;
-    const partner = await Partner.findById(partnerId);
-
-    if (!partner) {
-      return res.status(404).json({
-        success: false,
-        message: 'Assigned partner not found'
-      });
-    }
-
     // Fetch user details for display name
     const User = require('../models/user.model');
     const userDoc = await User.findById(userId);
     const userName = userDoc ? `${userDoc.firstName || ''} ${userDoc.lastName || ''}`.trim() : 'Customer';
 
-    const feedbackText = feedback ? feedback.trim() : '';
+    const serviceFeedbackText = serviceFeedback !== undefined ? String(serviceFeedback).trim() : (feedback !== undefined ? String(feedback).trim() : '');
+    const partnerFeedbackText = partnerFeedback !== undefined ? String(partnerFeedback).trim() : (feedback !== undefined ? String(feedback).trim() : '');
 
-    // Update cart item rating fields
-    cartItem.rating = numericRating;
-    cartItem.ratingFeedback = feedbackText;
-    cartItem.isRated = true;
-    cartItem.ratedAt = new Date();
-    await cartItem.save();
+    let serviceAverageRating = null;
+    let serviceTotalRatings = null;
+    let partnerAverageRating = null;
+    let partnerTotalRatings = null;
 
-    // Check if rating from this cart item already exists in partner's ratings
-    const existingRatingIndex = partner.ratings.findIndex(
-      r => r.cartId && r.cartId.toString() === cartItemId
-    );
+    // 1. Process Service Rating
+    if (numServiceRating && cartItem.serviceId) {
+      const ServiceType = require('../models/serviceType.model');
+      const service = await ServiceType.findById(cartItem.serviceId);
+      if (service) {
+        if (!Array.isArray(service.ratings)) {
+          service.ratings = [];
+        }
 
-    if (existingRatingIndex >= 0) {
-      partner.ratings[existingRatingIndex].rating = numericRating;
-      partner.ratings[existingRatingIndex].feedback = feedbackText;
-      partner.ratings[existingRatingIndex].createdAt = new Date();
-    } else {
-      partner.ratings.push({
-        cartId: cartItem._id,
-        orderId: cartItem.orderId || '',
-        userId: userId,
-        userName: userName,
-        rating: numericRating,
-        feedback: feedbackText,
-        createdAt: new Date()
-      });
+        // Prevent multiple reviews for a single booking: match by cartId
+        const existingServiceRatingIndex = service.ratings.findIndex(
+          r => r.cartId && r.cartId.toString() === cartItemId
+        );
+
+        if (existingServiceRatingIndex >= 0) {
+          service.ratings[existingServiceRatingIndex].rating = numServiceRating;
+          service.ratings[existingServiceRatingIndex].feedback = serviceFeedbackText;
+          service.ratings[existingServiceRatingIndex].userName = userName;
+          service.ratings[existingServiceRatingIndex].createdAt = new Date();
+        } else {
+          service.ratings.push({
+            cartId: cartItem._id,
+            orderId: cartItem.orderId || '',
+            userId: userId,
+            userName: userName,
+            rating: numServiceRating,
+            feedback: serviceFeedbackText,
+            createdAt: new Date()
+          });
+        }
+
+        const sTotal = service.ratings.length;
+        const sSum = service.ratings.reduce((acc, curr) => acc + curr.rating, 0);
+        service.totalRatings = sTotal;
+        service.averageRating = sTotal > 0 ? Number((sSum / sTotal).toFixed(1)) : 0;
+        await ServiceType.findByIdAndUpdate(
+          service._id,
+          {
+            $set: {
+              ratings: service.ratings,
+              totalRatings: service.totalRatings,
+              averageRating: service.averageRating
+            }
+          },
+          { runValidators: false }
+        );
+
+        serviceAverageRating = service.averageRating;
+        serviceTotalRatings = service.totalRatings;
+      }
     }
 
-    // Recalculate partner's averageRating and totalRatings
-    const totalCount = partner.ratings.length;
-    const sumRatings = partner.ratings.reduce((acc, curr) => acc + curr.rating, 0);
-    const avg = totalCount > 0 ? Number((sumRatings / totalCount).toFixed(1)) : 0;
+    // 2. Process Partner Rating
+    if (numPartnerRating && cartItem.assignedPartner) {
+      const partner = await Partner.findById(cartItem.assignedPartner);
+      if (partner) {
+        if (!Array.isArray(partner.ratings)) {
+          partner.ratings = [];
+        }
 
-    partner.totalRatings = totalCount;
-    partner.averageRating = avg;
+        // Prevent multiple reviews for a single booking: match by cartId
+        const existingPartnerRatingIndex = partner.ratings.findIndex(
+          r => r.cartId && r.cartId.toString() === cartItemId
+        );
 
-    await partner.save();
+        if (existingPartnerRatingIndex >= 0) {
+          partner.ratings[existingPartnerRatingIndex].rating = numPartnerRating;
+          partner.ratings[existingPartnerRatingIndex].feedback = partnerFeedbackText;
+          partner.ratings[existingPartnerRatingIndex].userName = userName;
+          partner.ratings[existingPartnerRatingIndex].createdAt = new Date();
+        } else {
+          partner.ratings.push({
+            cartId: cartItem._id,
+            orderId: cartItem.orderId || '',
+            userId: userId,
+            userName: userName,
+            rating: numPartnerRating,
+            feedback: partnerFeedbackText,
+            createdAt: new Date()
+          });
+        }
+
+        const pTotal = partner.ratings.length;
+        const pSum = partner.ratings.reduce((acc, curr) => acc + curr.rating, 0);
+        partner.totalRatings = pTotal;
+        partner.averageRating = pTotal > 0 ? Number((pSum / pTotal).toFixed(1)) : 0;
+        await Partner.findByIdAndUpdate(
+          partner._id,
+          {
+            $set: {
+              ratings: partner.ratings,
+              totalRatings: partner.totalRatings,
+              averageRating: partner.averageRating,
+              ...(partner.role ? { role: String(partner.role).toUpperCase() } : {})
+            }
+          },
+          { runValidators: false }
+        );
+
+        partnerAverageRating = partner.averageRating;
+        partnerTotalRatings = partner.totalRatings;
+      }
+    }
+
+    // 3. Update Cart Item
+    if (numServiceRating) {
+      cartItem.serviceRating = numServiceRating;
+      cartItem.serviceFeedback = serviceFeedbackText;
+    }
+    if (numPartnerRating) {
+      cartItem.partnerRating = numPartnerRating;
+      cartItem.partnerFeedback = partnerFeedbackText;
+    }
+    cartItem.rating = numPartnerRating || numServiceRating || cartItem.rating;
+    cartItem.ratingFeedback = partnerFeedbackText || serviceFeedbackText || cartItem.ratingFeedback;
+    cartItem.isRated = true;
+    cartItem.ratedAt = new Date();
+    await Cart.findByIdAndUpdate(
+      cartItem._id,
+      {
+        $set: {
+          serviceRating: cartItem.serviceRating,
+          serviceFeedback: cartItem.serviceFeedback,
+          partnerRating: cartItem.partnerRating,
+          partnerFeedback: cartItem.partnerFeedback,
+          rating: cartItem.rating,
+          ratingFeedback: cartItem.ratingFeedback,
+          isRated: true,
+          ratedAt: cartItem.ratedAt
+        }
+      },
+      { runValidators: false }
+    );
 
     res.status(200).json({
       success: true,
       message: 'Rating and feedback submitted successfully',
       data: {
         cartItem,
-        partnerAverageRating: partner.averageRating,
-        partnerTotalRatings: partner.totalRatings
+        serviceAverageRating,
+        serviceTotalRatings,
+        partnerAverageRating,
+        partnerTotalRatings
       }
     });
   } catch (error) {
-    console.error('Error rating partner:', error);
+    console.error('Error rating order:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error while rating partner',
+      message: 'Server error while rating order',
       error: error.message
     });
   }
 };
-
-
 
 // @desc    Reschedule customer order slot
 // @route   PATCH /api/cart/reschedule/:cartItemId
@@ -1778,7 +1974,10 @@ const adminWarrantyClaimAction = async (req, res) => {
       scheduledSlot,
       status,
       reason,
-      notes
+      notes,
+      rejectionReason,
+      notApplicableReason,
+      resolutionNotes
     } = req.body;
 
     const cartItem = await Cart.findById(cartItemId)
@@ -1806,9 +2005,9 @@ const adminWarrantyClaimAction = async (req, res) => {
         scheduledStartTime: scheduledStartTime || '',
         scheduledEndTime: scheduledEndTime || '',
         assignedPartner: assignedPartner || null,
-        rejectionReason: status === 'rejected' ? (reason || '') : '',
-        resolutionNotes: status === 'completed' ? (notes || '') : '',
-        notApplicableReason: status === 'not_applicable' ? (notApplicableReason || reason || notes || 'Deemed not applicable by staff') : '',
+        rejectionReason: status === 'rejected' ? ((rejectionReason || reason || notes || '').trim()) : '',
+        resolutionNotes: status === 'completed' ? ((resolutionNotes || notes || reason || '').trim()) : '',
+        notApplicableReason: status === 'not_applicable' ? ((notApplicableReason || reason || notes || 'Deemed not applicable by staff').trim()) : '',
         resolvedAt: status === 'completed' ? new Date() : null
       };
 
@@ -1826,10 +2025,93 @@ const adminWarrantyClaimAction = async (req, res) => {
       });
     }
 
-    if (!cartItem.warrantyClaim || !cartItem.warrantyClaim.claimed) {
-      return res.status(400).json({
-        success: false,
-        message: 'No active warranty claim on this service order'
+    if (!cartItem.warrantyClaim) {
+      cartItem.warrantyClaim = {
+        claimed: true,
+        claimId: `WC-${Date.now().toString().slice(-6)}`,
+        status: status || 'pending',
+        reason: (reason || 'Warranty claim registered by staff').trim()
+      };
+    } else if (!cartItem.warrantyClaim.claimed) {
+      cartItem.warrantyClaim.claimed = true;
+      if (!cartItem.warrantyClaim.claimId) {
+        cartItem.warrantyClaim.claimId = `WC-${Date.now().toString().slice(-6)}`;
+      }
+    }
+
+
+    // Admin / Manager process or approve customer refund
+    if (action === 'approve_refund' || action === 'process_refund') {
+      cartItem.warrantyClaim.refundStatus = 'approved';
+      cartItem.warrantyClaim.refundProcessedAt = new Date();
+      cartItem.warrantyClaim.status = 'refunded';
+      cartItem.status = 'refunded';
+
+      const approvedRefundAmt = cartItem.warrantyClaim.refundAmount || cartItem.finalAmount || cartItem.serviceCost || 0;
+      cartItem.tracking.unshift({
+        message: `Customer refund of ₹${approvedRefundAmt} approved and processed by Management.${notes ? ` Notes: ${notes}` : ''}`,
+        date: new Date(),
+        status: 'warrantyRefundApproved'
+      });
+
+      await cartItem.save();
+
+      try {
+        ably.channels.get("admin-channel").publish("task_updated", {
+          message: `Refund of ₹${approvedRefundAmt} approved for Order #${cartItem.orderId}`,
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'refunded'
+        });
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'refunded'
+        });
+      } catch (e) {
+        console.warn('Ably error:', e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Customer refund of ₹${approvedRefundAmt} approved and marked as processed`,
+        data: cartItem
+      });
+    }
+
+    if (action === 'reject_refund') {
+      cartItem.warrantyClaim.refundStatus = 'rejected';
+      cartItem.warrantyClaim.status = 'inProgress';
+
+      const rejectReason = (reason || notes || 'Refund request rejected by Management').trim();
+      cartItem.tracking.unshift({
+        message: `Warranty refund request rejected by Management: ${rejectReason}. Assigned for repair inspection.`,
+        date: new Date(),
+        status: 'warrantyRefundRejected'
+      });
+
+      await cartItem.save();
+
+      try {
+        ably.channels.get("admin-channel").publish("task_updated", {
+          message: `Refund rejected for Order #${cartItem.orderId}`,
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'inProgress'
+        });
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: 'inProgress'
+        });
+      } catch (e) {
+        console.warn('Ably error:', e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Warranty refund request rejected',
+        data: cartItem
       });
     }
 
@@ -1925,8 +2207,52 @@ const adminWarrantyClaimAction = async (req, res) => {
       });
     }
 
-    if (action === 'update_status' || action === 'edit_claim') {
-      const validStatuses = ['pending', 'approved', 'assigned', 'inProgress', 'completed', 'rejected', 'not_applicable', 'cancelled'];
+    // Dedicated handler for editing claim details without forcing status transitions
+    if (action === 'edit_claim') {
+      if (reason !== undefined) cartItem.warrantyClaim.reason = (reason || '').trim();
+      if (notes !== undefined) cartItem.warrantyClaim.notes = (notes || '').trim();
+      if (rejectionReason !== undefined) cartItem.warrantyClaim.rejectionReason = (rejectionReason || '').trim();
+      if (notApplicableReason !== undefined) cartItem.warrantyClaim.notApplicableReason = (notApplicableReason || '').trim();
+      if (resolutionNotes !== undefined) cartItem.warrantyClaim.resolutionNotes = (resolutionNotes || '').trim();
+      if (status && status !== 'none') cartItem.warrantyClaim.status = status;
+
+      cartItem.tracking.unshift({
+        message: `Warranty claim details updated by staff${notes ? `: ${notes}` : ''}`,
+        date: new Date(),
+        status: 'warrantyClaimEdited'
+      });
+
+      await cartItem.save();
+
+      try {
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: cartItem.warrantyClaim.status,
+          claimId: cartItem.warrantyClaim.claimId
+        });
+
+        const userChannelId = cartItem.userId?._id ? cartItem.userId._id.toString() : (cartItem.userId ? cartItem.userId.toString() : null);
+        if (userChannelId) {
+          ably.channels.get(`user-${userChannelId}`).publish("order_status_updated", {
+            orderId: cartItem.orderId || cartItem._id,
+            claimId: cartItem.warrantyClaim.claimId,
+            message: 'Warranty claim details updated by support.'
+          });
+        }
+      } catch (e) {
+        console.warn('Ably notify error:', e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Warranty claim details updated successfully',
+        data: cartItem
+      });
+    }
+
+    if (action === 'update_status') {
+      const validStatuses = ['pending', 'approved', 'assigned', 'inProgress', 'completed', 'rejected', 'not_applicable', 'cancelled', 'refund_initiated', 'refunded'];
       const targetClaimStatus = status || cartItem.warrantyClaim.status;
       
       if (status && !validStatuses.includes(status)) {
@@ -1951,22 +2277,24 @@ const adminWarrantyClaimAction = async (req, res) => {
       if (scheduledEndTime !== undefined) cartItem.warrantyClaim.scheduledEndTime = scheduledEndTime;
 
       if (targetClaimStatus === 'completed') {
+        const finalResNotes = (resolutionNotes || notes || reason || 'Warranty service issue resolved').trim();
         cartItem.warrantyClaim.resolvedAt = new Date();
-        cartItem.warrantyClaim.resolutionNotes = notes || reason || 'Warranty service issue resolved';
+        cartItem.warrantyClaim.resolutionNotes = finalResNotes;
         cartItem.tracking.unshift({
-          message: `Warranty claim resolved successfully: ${cartItem.warrantyClaim.resolutionNotes}`,
+          message: `Warranty claim resolved successfully: ${finalResNotes}`,
           date: new Date(),
           status: 'warrantyResolved'
         });
       } else if (targetClaimStatus === 'rejected') {
-        cartItem.warrantyClaim.rejectionReason = reason || notes || 'Warranty claim rejected by management';
+        const finalRejectionReason = (rejectionReason || reason || notes || 'Warranty claim rejected by management').trim();
+        cartItem.warrantyClaim.rejectionReason = finalRejectionReason;
         cartItem.tracking.unshift({
-          message: `Warranty claim rejected: ${cartItem.warrantyClaim.rejectionReason}`,
+          message: `Warranty claim rejected: ${finalRejectionReason}`,
           date: new Date(),
           status: 'warrantyRejected'
         });
       } else if (targetClaimStatus === 'not_applicable') {
-        const naReason = notApplicableReason || reason || notes || 'Issue outside warranty scope / Not applicable';
+        const naReason = (notApplicableReason || reason || notes || 'Issue outside warranty scope / Not applicable').trim();
         cartItem.warrantyClaim.notApplicableReason = naReason;
         cartItem.warrantyClaim.rejectionReason = naReason;
         cartItem.tracking.unshift({
@@ -1983,6 +2311,44 @@ const adminWarrantyClaimAction = async (req, res) => {
       }
 
       await cartItem.save();
+
+      // Notify Ably admin and customer
+      try {
+        ably.channels.get("admin-channel").publish("warranty_claim_updated", {
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: targetClaimStatus,
+          claimId: cartItem.warrantyClaim.claimId,
+          rejectionReason: cartItem.warrantyClaim.rejectionReason,
+          notApplicableReason: cartItem.warrantyClaim.notApplicableReason
+        });
+        ably.channels.get("admin-channel").publish("task_updated", {
+          message: `Warranty claim status: ${targetClaimStatus}`,
+          taskId: cartItem._id,
+          orderId: cartItem.orderId,
+          status: targetClaimStatus
+        });
+
+        const userChannelId = cartItem.userId?._id ? cartItem.userId._id.toString() : (cartItem.userId ? cartItem.userId.toString() : null);
+        if (userChannelId) {
+          const userMsg = targetClaimStatus === 'rejected'
+            ? `Warranty claim rejected: ${cartItem.warrantyClaim.rejectionReason}`
+            : targetClaimStatus === 'not_applicable'
+            ? `Warranty claim not applicable: ${cartItem.warrantyClaim.notApplicableReason}`
+            : `Warranty claim status updated to ${targetClaimStatus}`;
+
+          ably.channels.get(`user-${userChannelId}`).publish("order_status_updated", {
+            orderId: cartItem.orderId || cartItem._id,
+            claimId: cartItem.warrantyClaim.claimId,
+            status: targetClaimStatus,
+            rejectionReason: cartItem.warrantyClaim.rejectionReason,
+            notApplicableReason: cartItem.warrantyClaim.notApplicableReason,
+            message: userMsg
+          });
+        }
+      } catch (e) {
+        console.warn('Ably notification error:', e.message);
+      }
 
       return res.status(200).json({
         success: true,

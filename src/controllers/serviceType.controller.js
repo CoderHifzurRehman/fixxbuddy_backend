@@ -609,3 +609,38 @@ exports.getFullServiceHierarchy = async (req, res) => {
     res.status(500).send({ statusCode: 500, message: errorMsg });
   }
 };
+// @desc    Get reviews and ratings for a service
+// @route   GET /api/servicetype/:id/reviews
+// @access  Public
+exports.getServiceReviews = async (req, res) => {
+  try {
+    const serviceId = req.params.id;
+    const service = await ServiceType.findById(serviceId).select('serviceName averageRating totalRatings ratings');
+
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found'
+      });
+    }
+
+    const reviews = (service.ratings || []).slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        serviceId: service._id,
+        serviceName: service.serviceName,
+        averageRating: service.averageRating || 0,
+        totalRatings: service.totalRatings || 0,
+        ratings: reviews
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching service reviews',
+      error: err.message
+    });
+  }
+};
